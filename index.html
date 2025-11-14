@@ -184,6 +184,52 @@
         cursor: not-allowed;
       }
 
+      .categorias-lancamento {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+      }
+
+      .categoria-grupo {
+        flex: 1 1 220px;
+        min-width: 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .categoria-titulo {
+        font-weight: 600;
+        color: var(--cor-texto);
+      }
+
+      .grupo-botoes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .botao-categoria {
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        border: 1px solid #90caf9;
+        padding: 0.55rem 1rem;
+        font-size: 0.95rem;
+        align-self: flex-start;
+        transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+      }
+
+      .botao-categoria:hover:not(:disabled) {
+        background-color: #bbdefb;
+        color: #0b3c91;
+      }
+
+      .botao-categoria.ativo {
+        background-color: #0d47a1;
+        color: #ffffff;
+        border-color: #0d47a1;
+      }
+
       .status-area {
         min-height: 1.5rem;
         display: flex;
@@ -300,6 +346,79 @@
             <div class="form-group">
               <label for="dataLancamento">Data</label>
               <input id="dataLancamento" type="date" required />
+            </div>
+          </div>
+          <div class="categorias-lancamento" aria-label="Atalhos para descrição do lançamento">
+            <div class="categoria-grupo">
+              <span class="categoria-titulo">Entradas</span>
+              <div class="grupo-botoes" data-grupo="entrada">
+                <button
+                  type="button"
+                  class="botao-categoria"
+                  data-tipo="Entrada"
+                  data-descricao="Patrocínio"
+                  data-exige-detalhe="true"
+                >
+                  Patrocínio
+                </button>
+                <button
+                  type="button"
+                  class="botao-categoria"
+                  data-tipo="Entrada"
+                  data-descricao="Aporte Bruno"
+                >
+                  Aporte Bruno
+                </button>
+                <button
+                  type="button"
+                  class="botao-categoria"
+                  data-tipo="Entrada"
+                  data-descricao="Aporte Xandão"
+                >
+                  Aporte Xandão
+                </button>
+                <button
+                  type="button"
+                  class="botao-categoria"
+                  data-tipo="Entrada"
+                  data-permite-livre="true"
+                  data-focus="descricao"
+                >
+                  Outro
+                </button>
+              </div>
+            </div>
+            <div class="categoria-grupo">
+              <span class="categoria-titulo">Saídas</span>
+              <div class="grupo-botoes" data-grupo="saida">
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Scallet">
+                  Scallet
+                </button>
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="ADS">
+                  ADS
+                </button>
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Social Monster">
+                  Social Monster
+                </button>
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="IA">
+                  IA
+                </button>
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Instagram">
+                  Instagram
+                </button>
+                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Studio">
+                  Studio
+                </button>
+                <button
+                  type="button"
+                  class="botao-categoria"
+                  data-tipo="Saída"
+                  data-permite-livre="true"
+                  data-focus="descricao"
+                >
+                  Outro
+                </button>
+              </div>
             </div>
           </div>
           <div class="form-row">
@@ -557,6 +676,84 @@
           evento.preventDefault();
           enviarLancamento();
         });
+        configurarBotoesCategorias();
+      }
+
+      /**
+       * Configura os botões de atalho para preencher os dados do lançamento.
+       */
+      function configurarBotoesCategorias() {
+        const botoes = document.querySelectorAll('.botao-categoria');
+        if (!botoes.length) {
+          return;
+        }
+
+        const inputDescricao = document.getElementById('descricaoLancamento');
+        const inputValor = document.getElementById('valorLancamento');
+        const seletorTipo = document.getElementById('tipoLancamento');
+
+        if (!inputDescricao || !inputValor || !seletorTipo) {
+          return;
+        }
+
+        botoes.forEach(function (botao) {
+          botao.addEventListener('click', function () {
+            const exigeDetalhe = botao.dataset.exigeDetalhe === 'true';
+            const permiteLivre = botao.dataset.permiteLivre === 'true';
+            const focoPreferencia = botao.dataset.focus || (permiteLivre ? 'descricao' : 'valor');
+            let descricaoBase = botao.dataset.descricao || '';
+
+            if (exigeDetalhe) {
+              const detalhe = prompt('Digite o patrocinador:');
+              if (!detalhe) {
+                return;
+              }
+              const detalheLimpo = detalhe.trim();
+              if (!detalheLimpo) {
+                return;
+              }
+              descricaoBase = `${descricaoBase} - ${detalheLimpo}`;
+            }
+
+            const tipo = botao.dataset.tipo;
+            if (tipo && seletorTipo) {
+              seletorTipo.value = tipo;
+            }
+
+            document.querySelectorAll('.grupo-botoes .botao-categoria').forEach(function (item) {
+              item.classList.remove('ativo');
+            });
+            botao.classList.add('ativo');
+
+            if (permiteLivre) {
+              inputDescricao.value = '';
+            } else if (descricaoBase) {
+              inputDescricao.value = descricaoBase;
+            } else {
+              inputDescricao.value = '';
+            }
+
+            if (focoPreferencia === 'descricao') {
+              inputDescricao.focus();
+              if (typeof inputDescricao.select === 'function') {
+                inputDescricao.select();
+              }
+            } else {
+              inputValor.focus();
+              if (typeof inputValor.select === 'function') {
+                inputValor.select();
+              }
+            }
+          });
+        });
+
+        if (seletorTipo) {
+          seletorTipo.addEventListener('change', function () {
+            document.querySelectorAll('.grupo-botoes .botao-categoria').forEach(function (botao) {
+              botao.classList.remove('ativo');
+            });
+          });
+        }
       }
 
       /**
