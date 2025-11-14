@@ -382,7 +382,11 @@ function getDashboardData(requisicao) {
  */
 function getLancamentosRecentes(requisicao) {
   const contexto = prepararContexto(requisicao, false);
-  const maxRegistros = Number(contexto.parametros.limite || contexto.parametros.limit || 20);
+  const parametros = contexto.parametros || {};
+
+  const maxRegistros = Number(parametros.limite || parametros.limit || 200);
+
+  const intervalo = determinarIntervaloLancamentos(parametros);
 
   const spreadsheet = SpreadsheetApp.getActive();
   const sheetEntradas = obterAbaPorNomesOuCriar(
@@ -400,7 +404,113 @@ function getLancamentosRecentes(requisicao) {
     return b.data - a.data;
   });
 
-  return lancamentos.slice(0, maxRegistros);
+  const filtrados = lancamentos.filter(function (item) {
+    if (!(item.data instanceof Date) || isNaN(item.data)) {
+      return false;
+    }
+    if (!intervalo.inicio && !intervalo.fim) {
+      return true;
+    }
+    if (intervalo.inicio && item.data < intervalo.inicio) {
+      return false;
+    }
+    if (intervalo.fim && item.data > intervalo.fim) {
+      return false;
+    }
+    return true;
+  });
+
+  if (!isNaN(maxRegistros) && maxRegistros > 0) {
+    return filtrados.slice(0, maxRegistros);
+  }
+
+  return filtrados;
+}
+
+/**
+ * Remove lançamentos informados para o usuário com permissão.
+ *
+ * @param {{lancamentos: Array<{tipo: 'Entrada'|'Saída', linha: number}>}} requisicao
+ * @return {{success: boolean, message: string}}
+ */
+function deleteLancamentos(requisicao) {
+  try {
+    const contexto = prepararContexto(requisicao, true);
+
+    if (!contexto || !contexto.sessao || contexto.sessao.id !== 'bruno') {
+      return {
+        success: false,
+        message: 'Somente o usuário Bruno pode excluir lançamentos.',
+      };
+    }
+
+    const itens = Array.isArray(contexto.parametros.lancamentos)
+      ? contexto.parametros.lancamentos
+      : [];
+
+    if (itens.length === 0) {
+      return {
+        success: false,
+        message: 'Nenhum lançamento informado para exclusão.',
+      };
+    }
+
+    const porTipo = itens.reduce(function (acumulador, item) {
+      const tipo = item && item.tipo;
+      const linha = Number(item && item.linha);
+      if ((tipo === 'Entrada' || tipo === 'Saída') && !isNaN(linha) && linha >= 5) {
+        if (!acumulador[tipo]) {
+          acumulador[tipo] = [];
+        }
+        if (acumulador[tipo].indexOf(linha) === -1) {
+          acumulador[tipo].push(linha);
+        }
+      }
+      return acumulador;
+    }, {});
+
+    const tipos = Object.keys(porTipo);
+    if (tipos.length === 0) {
+      return {
+        success: false,
+        message: 'Nenhum lançamento válido informado para exclusão.',
+      };
+    }
+
+    const spreadsheet = SpreadsheetApp.getActive();
+
+    tipos.forEach(function (tipo) {
+      const sheet = obterAbaPorTipo(tipo, spreadsheet);
+      if (!sheet) {
+        throw new Error('Tipo de lançamento inválido: ' + tipo);
+      }
+
+      const linhas = porTipo[tipo]
+        .slice()
+        .sort(function (a, b) {
+          return b - a;
+        });
+
+      linhas.forEach(function (linha) {
+        const ultimaLinha = sheet.getLastRow();
+        if (linha > ultimaLinha) {
+          throw new Error('Linha inválida para exclusão: ' + linha);
+        }
+        sheet.deleteRow(linha);
+      });
+    });
+
+    return {
+      success: true,
+      message: 'Lançamento excluído com sucesso.',
+    };
+  } catch (erro) {
+    Logger.log('Erro ao excluir lançamento: ' + erro);
+    return {
+      success: false,
+      message: 'Não foi possível excluir o lançamento. Tente novamente.',
+    };
+  }
 }
 
 /**
@@ -469,7 +579,7 @@ function lerLancamentosDaAba(sheet, tipo) {
   const numeroLinhas = ultimaLinha - primeiraLinhaDados + 1;
   const valores = sheet.getRange(primeiraLinhaDados, 1, numeroLinhas, 3).getValues();
 
-  return valores.reduce(function (acumulador, linha) {
+  return valores.reduce(function (acumulador, linha, indice) {
     const dataCelula = linha[0];
     const descricao = linha[1];
     const valor = Number(linha[2]);
@@ -485,6 +595,7 @@ function lerLancamentosDaAba(sheet, tipo) {
       data: dataObj,
       descricao: descricao || '',
       valor: isNaN(valor) ? 0 : valor,
+      linha: primeiraLinhaDados + indice,
     });
 
     return acumulador;
@@ -641,6 +752,75 @@ function somarLancamentosAteData(lancamentos, limite) {
     }
     return total;
   }, 0);
+}
+
+/**
+ * Determina o intervalo de datas utilizado para filtrar lançamentos recentes.
+ *
+ * @param {{dataInicio?: string, dataFim?: string, mesReferencia?: string}} parametros
+ * @return {{inicio: Date|null, fim: Date|null}}
+ */
+function determinarIntervaloLancamentos(parametros) {
+  const dados = parametros || {};
+  let inicio = null;
+  let fim = null;
+
+  if (typeof dados.dataInicio === 'string' && dados.dataInicio) {
+    inicio = converterStringParaData(dados.dataInicio);
+  }
+
+  if (typeof dados.dataFim === 'string' && dados.dataFim) {
+    fim = converterStringParaData(dados.dataFim);
+  }
+
+  if (!inicio && !fim) {
+    if (typeof dados.mesReferencia === 'string' && dados.mesReferencia) {
+      const referencia = obterReferenciaMes(dados.mesReferencia);
+      inicio = normalizarInicioDoDia(new Date(referencia.ano, referencia.mes, 1));
+      fim = obterFimDoMes(referencia.ano, referencia.mes);
+    } else {
+      const fimPadrao = normalizarFimDoDia(new Date());
+      const inicioPadrao = new Date(fimPadrao.getTime());
+      inicioPadrao.setDate(inicioPadrao.getDate() - 29);
+      inicio = normalizarInicioDoDia(inicioPadrao);
+      fim = fimPadrao;
+    }
+  } else {
+    if (inicio) {
+      inicio = normalizarInicioDoDia(inicio);
+    }
+    if (fim) {
+      fim = normalizarFimDoDia(fim);
+    } else if (inicio) {
+      fim = normalizarFimDoDia(new Date());
+    }
+  }
+
+  return { inicio: inicio, fim: fim };
+}
+
+/**
+ * Ajusta uma data para o início do dia (00:00:00.000).
+ *
+ * @param {Date} data Data alvo.
+ * @return {Date}
+ */
+function normalizarInicioDoDia(data) {
+  const clone = new Date(data.getTime());
+  clone.setHours(0, 0, 0, 0);
+  return clone;
+}
+
+/**
+ * Ajusta uma data para o fim do dia (23:59:59.999).
+ *
+ * @param {Date} data Data alvo.
+ * @return {Date}
+ */
+function normalizarFimDoDia(data) {
+  const clone = new Date(data.getTime());
+  clone.setHours(23, 59, 59, 999);
+  return clone;
 }
 
 /**

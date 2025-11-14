@@ -158,6 +158,38 @@
         max-width: 260px;
       }
 
+      .filtros-lancamentos {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+        margin-bottom: 1rem;
+      }
+
+      .filtros-lancamentos .grupo-filtro {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .filtros-lancamentos .grupo-periodo {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .filtros-lancamentos .grupo-periodo label {
+        margin-bottom: 0;
+      }
+
+      .filtros-lancamentos .grupo-periodo input {
+        min-width: 150px;
+      }
+
+      .filtros-lancamentos button {
+        align-self: center;
+      }
+
       .card {
         background-color: var(--cor-card);
         border-radius: 12px;
@@ -361,6 +393,11 @@
         border-bottom: 1px solid var(--cor-borda);
       }
 
+      th.acoes,
+      td.acoes {
+        text-align: center;
+      }
+
       tbody tr.entrada td.valor {
         color: var(--cor-entradas);
         font-weight: 600;
@@ -386,6 +423,25 @@
 
       .formulario-bloqueado {
         opacity: 0.75;
+      }
+
+      .botao-acao {
+        padding: 0.45rem 0.9rem;
+        font-size: 0.85rem;
+        border-radius: 6px;
+        align-self: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .botao-acao.botao-excluir {
+        background-color: var(--cor-saidas);
+        border: 1px solid #c62828;
+      }
+
+      .botao-acao.botao-excluir:hover:not(:disabled) {
+        background-color: #c62828;
       }
 
       @media (min-width: 640px) {
@@ -565,6 +621,27 @@
 
       <section aria-labelledby="recentes-titulo">
         <h2 id="recentes-titulo">Lançamentos Recentes</h2>
+        <div class="filtros-lancamentos" aria-label="Filtros de lançamentos recentes">
+          <div class="grupo-filtro">
+            <label for="filtroLancamentosModo">Mostrar</label>
+            <select id="filtroLancamentosModo">
+              <option value="ultimos30">Últimos 30 dias</option>
+              <option value="mes">Por mês</option>
+              <option value="periodo">Período personalizado</option>
+            </select>
+          </div>
+          <div class="grupo-filtro" id="grupoFiltroMes" hidden>
+            <label for="filtroLancamentosMes">Mês</label>
+            <select id="filtroLancamentosMes"></select>
+          </div>
+          <div class="grupo-filtro grupo-periodo" id="grupoFiltroPeriodo" hidden>
+            <label for="filtroDataInicio">De</label>
+            <input type="date" id="filtroDataInicio" />
+            <label for="filtroDataFim">até</label>
+            <input type="date" id="filtroDataFim" />
+          </div>
+          <button type="button" id="aplicarFiltroLancamentos">Aplicar</button>
+        </div>
         <div class="tabela-container">
           <table>
             <thead>
@@ -573,6 +650,7 @@
                 <th>Data</th>
                 <th>Descrição</th>
                 <th class="valor">Valor</th>
+                <th class="acoes" id="colunaAcoesLancamentos" hidden>Ações</th>
               </tr>
             </thead>
             <tbody id="lancamentosBody"></tbody>
@@ -604,10 +682,12 @@
 
       const CHAVE_SESSAO = 'plusPodcastSessao';
       const PAPEL_SOMENTE_LEITURA = 'leitura';
+      const USUARIO_EXCLUSAO = 'bruno';
 
       let tipoLancamentoAtual = 'Entrada';
       let sessaoAtual = null;
       let appInicializado = false;
+      let cacheMesesDisponiveis = [];
 
       window.onload = function () {
         configurarInterfaceInicial();
@@ -730,6 +810,7 @@
           definirDataPadrao();
           configurarSelecaoMes();
           configurarFormulario();
+          configurarFiltroLancamentos();
           appInicializado = true;
         }
 
@@ -952,10 +1033,20 @@
       }
 
       function carregarLancamentos() {
-        const requisicao = criarRequisicao({ limite: 20 });
+        const filtro = obterParametrosFiltroLancamentos();
+        if (filtro.erro) {
+          mostrarMensagem(filtro.erro, 'erro');
+          return;
+        }
+
+        const parametros = Object.assign({ limite: 200 }, filtro.parametros || {});
+
+        const requisicao = criarRequisicao(parametros);
         if (!requisicao) {
           return;
         }
+
+        atualizarVisibilidadeAcoesLancamentos();
 
         google.script.run
           .withSuccessHandler(preencherLancamentos)
@@ -1013,6 +1104,8 @@
 
         const lista = Array.isArray(meses) && meses.length > 0 ? meses : [obterMesAtualInfo()];
 
+        cacheMesesDisponiveis = lista.slice();
+
         seletor.innerHTML = '';
 
         lista.forEach(function (item) {
@@ -1028,7 +1121,199 @@
 
         seletor.value = existeAnterior ? valorAnterior : lista[0].valor;
 
+        preencherSeletorMesesLancamentos(lista);
+
         carregarResumo(seletor.value);
+      }
+
+      function preencherSeletorMesesLancamentos(meses) {
+        const seletor = document.getElementById('filtroLancamentosMes');
+        if (!seletor) {
+          return;
+        }
+
+        const lista = Array.isArray(meses) && meses.length > 0 ? meses : [obterMesAtualInfo()];
+        const valorAnterior = seletor.value;
+
+        seletor.innerHTML = '';
+
+        lista.forEach(function (item) {
+          const opcao = document.createElement('option');
+          opcao.value = item.valor;
+          opcao.textContent = item.rotulo;
+          seletor.appendChild(opcao);
+        });
+
+        const existeAnterior = lista.some(function (item) {
+          return item.valor === valorAnterior;
+        });
+
+        seletor.value = existeAnterior ? valorAnterior : lista[0].valor;
+      }
+
+      function configurarFiltroLancamentos() {
+        const seletorModo = document.getElementById('filtroLancamentosModo');
+        const seletorMes = document.getElementById('filtroLancamentosMes');
+        const botaoAplicar = document.getElementById('aplicarFiltroLancamentos');
+
+        if (seletorModo && seletorModo.dataset.configurado !== 'true') {
+          seletorModo.dataset.configurado = 'true';
+          seletorModo.addEventListener('change', function () {
+            atualizarExibicaoFiltroLancamentos();
+            if (seletorModo.value === 'ultimos30') {
+              carregarLancamentos();
+            }
+          });
+        }
+
+        if (seletorMes && seletorMes.dataset.configurado !== 'true') {
+          seletorMes.dataset.configurado = 'true';
+          seletorMes.addEventListener('change', function () {
+            if ((seletorModo && seletorModo.value) === 'mes') {
+              carregarLancamentos();
+            }
+          });
+        }
+
+        if (botaoAplicar && botaoAplicar.dataset.configurado !== 'true') {
+          botaoAplicar.dataset.configurado = 'true';
+          botaoAplicar.addEventListener('click', function () {
+            carregarLancamentos();
+          });
+        }
+
+        atualizarExibicaoFiltroLancamentos();
+      }
+
+      function atualizarExibicaoFiltroLancamentos() {
+        const seletorModo = document.getElementById('filtroLancamentosModo');
+        const grupoMes = document.getElementById('grupoFiltroMes');
+        const grupoPeriodo = document.getElementById('grupoFiltroPeriodo');
+        const modo = seletorModo ? seletorModo.value : 'ultimos30';
+
+        if (grupoMes) {
+          grupoMes.hidden = modo !== 'mes';
+        }
+        if (grupoPeriodo) {
+          grupoPeriodo.hidden = modo !== 'periodo';
+        }
+
+        if (modo === 'mes') {
+          preencherSeletorMesesLancamentos(cacheMesesDisponiveis);
+        }
+      }
+
+      function obterParametrosFiltroLancamentos() {
+        const seletorModo = document.getElementById('filtroLancamentosModo');
+        const modo = seletorModo ? seletorModo.value : 'ultimos30';
+
+        if (modo === 'mes') {
+          const seletorMes = document.getElementById('filtroLancamentosMes');
+          const mesSelecionado = seletorMes ? seletorMes.value : '';
+          return {
+            parametros: mesSelecionado ? { mesReferencia: mesSelecionado } : {},
+          };
+        }
+
+        if (modo === 'periodo') {
+          const campoInicio = document.getElementById('filtroDataInicio');
+          const campoFim = document.getElementById('filtroDataFim');
+          const inicio = campoInicio ? campoInicio.value : '';
+          const fim = campoFim ? campoFim.value : '';
+
+          if (!inicio || !fim) {
+            return {
+              erro: 'Informe as datas inicial e final para filtrar por período.',
+            };
+          }
+
+          if (inicio > fim) {
+            return {
+              erro: 'A data inicial não pode ser maior que a data final.',
+            };
+          }
+
+          return {
+            parametros: {
+              dataInicio: inicio,
+              dataFim: fim,
+            },
+          };
+        }
+
+        return { parametros: {} };
+      }
+
+      function usuarioPodeExcluirLancamentos() {
+        return !!(sessaoAtual && sessaoAtual.id === USUARIO_EXCLUSAO);
+      }
+
+      function atualizarVisibilidadeAcoesLancamentos() {
+        const cabecalho = document.getElementById('colunaAcoesLancamentos');
+        if (!cabecalho) {
+          return;
+        }
+        cabecalho.hidden = !usuarioPodeExcluirLancamentos();
+      }
+
+      function solicitarExclusaoLancamento(item) {
+        if (!usuarioPodeExcluirLancamentos()) {
+          return;
+        }
+
+        if (!item || !item.tipo || typeof item.linha === 'undefined') {
+          return;
+        }
+
+        const descricao = item.descricao || '-';
+        const dataTexto = formatarDataBrasileira(new Date(item.data));
+        const mensagemConfirmacao =
+          'Tem certeza que deseja excluir o lançamento "' +
+          descricao +
+          '" de ' +
+          dataTexto +
+          '?';
+
+        if (!confirm(mensagemConfirmacao)) {
+          return;
+        }
+
+        mostrarMensagem('Excluindo lançamento...', 'info');
+        excluirLancamentos([
+          {
+            tipo: item.tipo,
+            linha: item.linha,
+          },
+        ]);
+      }
+
+      function excluirLancamentos(lancamentos) {
+        const requisicao = criarRequisicao({ lancamentos: lancamentos });
+        if (!requisicao) {
+          mostrarMensagem('Sessão expirada. Faça login novamente.', 'erro');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            if (resposta && resposta.success) {
+              mostrarMensagem(resposta.message || 'Lançamento excluído com sucesso.', 'sucesso');
+              carregarLancamentos();
+              carregarMesesDisponiveis();
+            } else {
+              mostrarMensagem(
+                (resposta && resposta.message) || 'Não foi possível excluir o lançamento.',
+                'erro'
+              );
+            }
+          })
+          .withFailureHandler(function (erro) {
+            if (tratarErroDeSessao(erro)) {
+              return;
+            }
+            mostrarMensagem('Não foi possível excluir o lançamento.', 'erro');
+          })
+          .deleteLancamentos(requisicao);
       }
 
       function preencherLancamentos(lancamentos) {
@@ -1039,10 +1324,13 @@
 
         corpoTabela.innerHTML = '';
 
+        const permitirExcluir = usuarioPodeExcluirLancamentos();
+        atualizarVisibilidadeAcoesLancamentos();
+
         if (!lancamentos || lancamentos.length === 0) {
           const linhaVazia = document.createElement('tr');
           const coluna = document.createElement('td');
-          coluna.colSpan = 4;
+          coluna.colSpan = permitirExcluir ? 5 : 4;
           coluna.textContent = 'Nenhum lançamento encontrado.';
           linhaVazia.appendChild(coluna);
           corpoTabela.appendChild(linhaVazia);
@@ -1071,6 +1359,22 @@
           linha.appendChild(colunaData);
           linha.appendChild(colunaDescricao);
           linha.appendChild(colunaValor);
+
+          if (permitirExcluir) {
+            const colunaAcoes = document.createElement('td');
+            colunaAcoes.classList.add('acoes');
+
+            const botaoExcluir = document.createElement('button');
+            botaoExcluir.type = 'button';
+            botaoExcluir.textContent = 'Excluir';
+            botaoExcluir.className = 'botao-acao botao-excluir';
+            botaoExcluir.addEventListener('click', function () {
+              solicitarExclusaoLancamento(item);
+            });
+
+            colunaAcoes.appendChild(botaoExcluir);
+            linha.appendChild(colunaAcoes);
+          }
 
           corpoTabela.appendChild(linha);
         });
@@ -1309,6 +1613,8 @@
         if (aviso) {
           aviso.hidden = !somenteLeitura;
         }
+
+        atualizarVisibilidadeAcoesLancamentos();
       }
 
       function mostrarMensagem(mensagem, tipo) {
