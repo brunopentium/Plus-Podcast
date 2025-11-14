@@ -337,13 +337,6 @@
         <form id="formLancamento">
           <div class="form-row">
             <div class="form-group">
-              <label for="tipoLancamento">Tipo</label>
-              <select id="tipoLancamento" required>
-                <option value="Entrada" selected>Entrada</option>
-                <option value="Saída">Saída</option>
-              </select>
-            </div>
-            <div class="form-group">
               <label for="dataLancamento">Data</label>
               <input id="dataLancamento" type="date" required />
             </div>
@@ -480,6 +473,8 @@
         'Dezembro',
       ];
 
+      let tipoLancamentoAtual = 'Entrada';
+
       /**
        * Inicializa a página ao terminar de carregar.
        */
@@ -489,6 +484,42 @@
         carregarLancamentos();
         configurarFormulario();
       };
+
+      function definirTipoLancamento(tipo) {
+        if (tipo === 'Entrada' || tipo === 'Saída') {
+          tipoLancamentoAtual = tipo;
+        }
+      }
+
+      function obterTipoLancamentoAtual() {
+        return tipoLancamentoAtual;
+      }
+
+      function inferirTipoDoBotao(botao) {
+        if (!botao) {
+          return tipoLancamentoAtual;
+        }
+
+        const tipoDireto = botao.dataset.tipo;
+        if (tipoDireto === 'Entrada' || tipoDireto === 'Saída') {
+          return tipoDireto;
+        }
+
+        const grupo = botao.closest('.grupo-botoes');
+        if (!grupo) {
+          return tipoLancamentoAtual;
+        }
+
+        if (grupo.dataset.grupo === 'entrada') {
+          return 'Entrada';
+        }
+
+        if (grupo.dataset.grupo === 'saida') {
+          return 'Saída';
+        }
+
+        return tipoLancamentoAtual;
+      }
 
       /**
        * Define a data atual como valor padrão do campo de data.
@@ -690,9 +721,8 @@
 
         const inputDescricao = document.getElementById('descricaoLancamento');
         const inputValor = document.getElementById('valorLancamento');
-        const seletorTipo = document.getElementById('tipoLancamento');
 
-        if (!inputDescricao || !inputValor || !seletorTipo) {
+        if (!inputDescricao || !inputValor) {
           return;
         }
 
@@ -702,6 +732,7 @@
             const permiteLivre = botao.dataset.permiteLivre === 'true';
             const focoPreferencia = botao.dataset.focus || (permiteLivre ? 'descricao' : 'valor');
             let descricaoBase = botao.dataset.descricao || '';
+            definirTipoLancamento(inferirTipoDoBotao(botao));
 
             if (exigeDetalhe) {
               const detalhe = prompt('Digite o patrocinador:');
@@ -713,11 +744,6 @@
                 return;
               }
               descricaoBase = `${descricaoBase} - ${detalheLimpo}`;
-            }
-
-            const tipo = botao.dataset.tipo;
-            if (tipo && seletorTipo) {
-              seletorTipo.value = tipo;
             }
 
             document.querySelectorAll('.grupo-botoes .botao-categoria').forEach(function (item) {
@@ -746,14 +772,6 @@
             }
           });
         });
-
-        if (seletorTipo) {
-          seletorTipo.addEventListener('change', function () {
-            document.querySelectorAll('.grupo-botoes .botao-categoria').forEach(function (botao) {
-              botao.classList.remove('ativo');
-            });
-          });
-        }
       }
 
       /**
@@ -762,10 +780,15 @@
       function enviarLancamento() {
         limparMensagens();
 
-        const tipo = document.getElementById('tipoLancamento').value;
+        const tipo = obterTipoLancamentoAtual();
         const data = document.getElementById('dataLancamento').value;
         const descricao = document.getElementById('descricaoLancamento').value.trim();
         const valor = Number(document.getElementById('valorLancamento').value);
+
+        if (tipo !== 'Entrada' && tipo !== 'Saída') {
+          mostrarMensagem('Escolha uma categoria de entrada ou saída para o lançamento.', 'erro');
+          return;
+        }
 
         if (!descricao) {
           mostrarMensagem('Informe uma descrição para o lançamento.', 'erro');
