@@ -30,14 +30,100 @@
         background: linear-gradient(135deg, #0d47a1, #1976d2);
         color: #ffffff;
         padding: 1.5rem 2rem;
-        text-align: center;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
       }
 
       header h1 {
         margin: 0;
         font-size: 1.8rem;
         letter-spacing: 0.5px;
+        text-align: center;
+      }
+
+      .usuario-barra {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.95rem;
+      }
+
+      .usuario-barra span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      #usuarioPermissao {
+        font-style: italic;
+        opacity: 0.85;
+      }
+
+      .usuario-barra strong {
+        font-weight: 600;
+      }
+
+      .usuario-barra button {
+        background-color: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+
+      .usuario-barra button:hover {
+        background-color: rgba(255, 255, 255, 0.35);
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      #loginContainer {
+        display: flex;
+        justify-content: center;
+        padding: 3rem 1.5rem;
+      }
+
+      .login-form {
+        background-color: var(--cor-card);
+        border-radius: 12px;
+        padding: 2rem;
+        width: 100%;
+        max-width: 360px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .login-form h2 {
+        margin: 0;
+        text-align: center;
+        font-size: 1.35rem;
+      }
+
+      .login-status {
+        min-height: 1.5rem;
+        font-size: 0.95rem;
+        text-align: center;
+      }
+
+      .login-status.info {
+        color: var(--cor-saldo);
+      }
+
+      .login-status.erro {
+        color: var(--cor-saidas);
+      }
+
+      .login-status.sucesso {
+        color: var(--cor-entradas);
       }
 
       main {
@@ -289,6 +375,30 @@
         background-color: rgba(0, 0, 0, 0.02);
       }
 
+      .alerta-somente-leitura {
+        background-color: rgba(13, 71, 161, 0.08);
+        border-left: 4px solid var(--cor-saldo);
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+      }
+
+      .formulario-bloqueado {
+        opacity: 0.75;
+      }
+
+      @media (min-width: 640px) {
+        header {
+          flex-direction: row;
+          justify-content: space-between;
+        }
+
+        header h1 {
+          text-align: left;
+        }
+      }
+
       @media (max-width: 600px) {
         header h1 {
           font-size: 1.4rem;
@@ -308,8 +418,24 @@
   <body>
     <header>
       <h1>Plus Podcast - Finanças</h1>
+      <div id="usuarioBarra" class="usuario-barra" hidden>
+        <span>Logado como <strong id="usuarioNome"></strong></span>
+        <span id="usuarioPermissao"></span>
+        <button type="button" id="botaoLogout">Sair</button>
+      </div>
     </header>
-    <main>
+    <div id="loginContainer" role="region" aria-label="Acesso ao sistema">
+      <form id="formLogin" class="login-form">
+        <h2>Acesso restrito</h2>
+        <label for="loginUsuario">Usuário</label>
+        <input id="loginUsuario" type="text" autocomplete="username" required />
+        <label for="loginSenha">Senha</label>
+        <input id="loginSenha" type="password" autocomplete="current-password" required />
+        <div id="loginMensagem" class="login-status" role="status"></div>
+        <button id="botaoLogin" type="submit">Entrar</button>
+      </form>
+    </div>
+    <main id="appConteudo" hidden>
       <section aria-labelledby="resumo-titulo">
         <h2 id="resumo-titulo">Resumo Financeiro</h2>
         <div class="controle-mes">
@@ -334,6 +460,10 @@
 
       <section aria-labelledby="novo-titulo">
         <h2 id="novo-titulo">Novo Lançamento</h2>
+        <p id="avisoSomenteLeitura" class="alerta-somente-leitura" hidden>
+          Você está utilizando uma conta com permissão somente leitura. O envio de novos lançamentos está
+          desabilitado para este perfil.
+        </p>
         <form id="formLancamento">
           <div class="form-row">
             <div class="form-group">
@@ -452,7 +582,6 @@
     </main>
 
     <script>
-      // Formata valores monetários no padrão brasileiro.
       const formatadorMoeda = new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL',
@@ -473,17 +602,270 @@
         'Dezembro',
       ];
 
-      let tipoLancamentoAtual = 'Entrada';
+      const CHAVE_SESSAO = 'plusPodcastSessao';
+      const PAPEL_SOMENTE_LEITURA = 'leitura';
 
-      /**
-       * Inicializa a página ao terminar de carregar.
-       */
+      let tipoLancamentoAtual = 'Entrada';
+      let sessaoAtual = null;
+      let appInicializado = false;
+
       window.onload = function () {
-        definirDataPadrao();
-        configurarSelecaoMes();
-        carregarLancamentos();
-        configurarFormulario();
+        configurarInterfaceInicial();
+        restaurarSessao();
       };
+
+      function configurarInterfaceInicial() {
+        const formularioLogin = document.getElementById('formLogin');
+        if (formularioLogin && !formularioLogin.dataset.configurado) {
+          formularioLogin.dataset.configurado = 'true';
+          formularioLogin.addEventListener('submit', function (evento) {
+            evento.preventDefault();
+            realizarLogin();
+          });
+        }
+
+        const botaoLogout = document.getElementById('botaoLogout');
+        if (botaoLogout && !botaoLogout.dataset.configurado) {
+          botaoLogout.dataset.configurado = 'true';
+          botaoLogout.addEventListener('click', function () {
+            realizarLogout(true, 'Sessão encerrada.');
+          });
+        }
+      }
+
+      function realizarLogin() {
+        const usuarioInput = document.getElementById('loginUsuario');
+        const senhaInput = document.getElementById('loginSenha');
+        const botao = document.getElementById('botaoLogin');
+
+        const usuario = usuarioInput ? usuarioInput.value.trim() : '';
+        const senha = senhaInput ? senhaInput.value : '';
+
+        if (!usuario || !senha) {
+          mostrarMensagemLogin('Informe usuário e senha.', 'erro');
+          return;
+        }
+
+        if (botao) {
+          botao.disabled = true;
+        }
+        mostrarMensagemLogin('Autenticando...', 'info');
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            if (botao) {
+              botao.disabled = false;
+            }
+            if (resposta && resposta.success) {
+              concluirLogin(resposta);
+            } else {
+              mostrarMensagemLogin(
+                (resposta && resposta.message) || 'Não foi possível autenticar. Verifique seus dados.',
+                'erro'
+              );
+            }
+          })
+          .withFailureHandler(function () {
+            if (botao) {
+              botao.disabled = false;
+            }
+            mostrarMensagemLogin('Não foi possível realizar o login. Tente novamente.', 'erro');
+          })
+          .login({ usuario: usuario, senha: senha });
+      }
+
+      function restaurarSessao() {
+        const sessaoSalva = obterSessaoLocal();
+        if (!sessaoSalva) {
+          exibirTelaLogin();
+          return;
+        }
+
+        mostrarMensagemLogin('Restaurando sessão...', 'info');
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            if (resposta && resposta.success) {
+              concluirLogin(resposta);
+            } else {
+              realizarLogout(true, (resposta && resposta.message) || 'Sessão expirada.');
+            }
+          })
+          .withFailureHandler(function () {
+            realizarLogout(true, 'Não foi possível validar a sessão. Faça login novamente.');
+          })
+          .validarSessao(sessaoSalva);
+      }
+
+      function concluirLogin(resposta) {
+        if (!resposta || !resposta.success || !resposta.usuario) {
+          mostrarMensagemLogin('Não foi possível autenticar. Verifique seus dados.', 'erro');
+          return;
+        }
+
+        const usuarioInfo = resposta.usuario;
+        sessaoAtual = {
+          id: usuarioInfo.id,
+          nome: usuarioInfo.nome || usuarioInfo.id,
+          papel: usuarioInfo.papel || '',
+          token: resposta.token,
+        };
+
+        salvarSessaoLocal(sessaoAtual);
+        limparMensagemLogin();
+        ocultarTelaLogin();
+
+        const formularioLogin = document.getElementById('formLogin');
+        if (formularioLogin) {
+          formularioLogin.reset();
+        }
+
+        atualizarBarraUsuario();
+        aplicarPermissoes();
+        iniciarAplicacao();
+      }
+
+      function iniciarAplicacao() {
+        if (!appInicializado) {
+          definirDataPadrao();
+          configurarSelecaoMes();
+          configurarFormulario();
+          appInicializado = true;
+        }
+
+        carregarMesesDisponiveis();
+        carregarLancamentos();
+      }
+
+      function realizarLogout(exibirMensagem, mensagem) {
+        const sessaoAnterior = sessaoAtual;
+        sessaoAtual = null;
+        removerSessaoLocal();
+
+        if (sessaoAnterior) {
+          google.script.run.logout({ usuario: sessaoAnterior.id, token: sessaoAnterior.token });
+        }
+
+        aplicarPermissoes();
+        atualizarBarraUsuario();
+        exibirTelaLogin(exibirMensagem ? mensagem : null, exibirMensagem ? 'info' : null);
+      }
+
+      function atualizarBarraUsuario() {
+        const barra = document.getElementById('usuarioBarra');
+        if (!barra) {
+          return;
+        }
+
+        if (!sessaoAtual) {
+          barra.hidden = true;
+          const nome = document.getElementById('usuarioNome');
+          const permissao = document.getElementById('usuarioPermissao');
+          if (nome) {
+            nome.textContent = '';
+          }
+          if (permissao) {
+            permissao.textContent = '';
+          }
+          return;
+        }
+
+        const nome = document.getElementById('usuarioNome');
+        const permissao = document.getElementById('usuarioPermissao');
+        if (nome) {
+          nome.textContent = sessaoAtual.nome || sessaoAtual.id;
+        }
+        if (permissao) {
+          permissao.textContent = sessaoAtual.papel === PAPEL_SOMENTE_LEITURA ? 'Somente leitura' : 'Administrador';
+        }
+        barra.hidden = false;
+      }
+
+      function exibirTelaLogin(mensagem, tipo) {
+        const login = document.getElementById('loginContainer');
+        const app = document.getElementById('appConteudo');
+        const barra = document.getElementById('usuarioBarra');
+
+        if (login) {
+          login.hidden = false;
+        }
+        if (app) {
+          app.hidden = true;
+        }
+        if (barra) {
+          barra.hidden = true;
+        }
+
+        if (mensagem) {
+          mostrarMensagemLogin(mensagem, tipo || 'info');
+        } else {
+          limparMensagemLogin();
+        }
+      }
+
+      function ocultarTelaLogin() {
+        const login = document.getElementById('loginContainer');
+        const app = document.getElementById('appConteudo');
+
+        if (login) {
+          login.hidden = true;
+        }
+        if (app) {
+          app.hidden = false;
+        }
+      }
+
+      function mostrarMensagemLogin(mensagem, tipo) {
+        const elemento = document.getElementById('loginMensagem');
+        if (!elemento) {
+          return;
+        }
+        elemento.textContent = mensagem || '';
+        elemento.className = 'login-status';
+        if (tipo) {
+          elemento.classList.add(tipo);
+        }
+      }
+
+      function limparMensagemLogin() {
+        const elemento = document.getElementById('loginMensagem');
+        if (!elemento) {
+          return;
+        }
+        elemento.textContent = '';
+        elemento.className = 'login-status';
+      }
+
+      function salvarSessaoLocal(sessao) {
+        if (!sessao) {
+          return;
+        }
+        const dados = {
+          usuario: sessao.id,
+          token: sessao.token,
+        };
+        localStorage.setItem(CHAVE_SESSAO, JSON.stringify(dados));
+      }
+
+      function obterSessaoLocal() {
+        try {
+          const armazenado = localStorage.getItem(CHAVE_SESSAO);
+          if (!armazenado) {
+            return null;
+          }
+          const dados = JSON.parse(armazenado);
+          if (!dados || !dados.usuario || !dados.token) {
+            return null;
+          }
+          return dados;
+        } catch (erro) {
+          return null;
+        }
+      }
+
+      function removerSessaoLocal() {
+        localStorage.removeItem(CHAVE_SESSAO);
+      }
 
       function definirTipoLancamento(tipo) {
         if (tipo === 'Entrada' || tipo === 'Saída') {
@@ -521,74 +903,83 @@
         return tipoLancamentoAtual;
       }
 
-      /**
-       * Define a data atual como valor padrão do campo de data.
-       */
       function definirDataPadrao() {
         const hoje = new Date();
         const ano = hoje.getFullYear();
         const mes = String(hoje.getMonth() + 1).padStart(2, '0');
         const dia = String(hoje.getDate()).padStart(2, '0');
-        document.getElementById('dataLancamento').value = `${ano}-${mes}-${dia}`;
+        const campoData = document.getElementById('dataLancamento');
+        if (campoData) {
+          campoData.value = `${ano}-${mes}-${dia}`;
+        }
       }
 
-      /**
-       * Solicita os dados de resumo financeiro ao servidor.
-       */
       function carregarResumo(mesReferencia) {
         const seletorMes = document.getElementById('mesResumo');
         const filtro =
           mesReferencia || (seletorMes ? seletorMes.value : obterMesAtualInfo().valor);
 
-        google.script.run
-          .withSuccessHandler(preencherResumo)
-          .withFailureHandler(function () {
-            mostrarMensagem('Não foi possível carregar o resumo financeiro.', 'erro');
-          })
-          .getDashboardData(filtro);
-      }
-
-      /**
-       * Atualiza os cards do resumo financeiro com os dados recebidos.
-       * @param {{saldoAtual: number, totalEntradas: number, totalSaidas: number}} dados
-       */
-      function preencherResumo(dados) {
-        document.getElementById('saldoAtual').textContent = formatadorMoeda.format(dados.saldoAtual || 0);
-        document.getElementById('totalEntradas').textContent = formatadorMoeda.format(dados.totalEntradas || 0);
-        document.getElementById('totalSaidas').textContent = formatadorMoeda.format(dados.totalSaidas || 0);
-      }
-
-      /**
-       * Solicita os lançamentos recentes ao servidor.
-       */
-      function carregarLancamentos() {
-        google.script.run
-          .withSuccessHandler(preencherLancamentos)
-          .withFailureHandler(function () {
-            mostrarMensagem('Não foi possível carregar os lançamentos recentes.', 'erro');
-          })
-          .getLancamentosRecentes(20);
-      }
-
-      /**
-       * Configura e carrega as opções de meses disponíveis para o resumo.
-       */
-      function configurarSelecaoMes() {
-        const seletor = document.getElementById('mesResumo');
-        if (!seletor) {
+        const requisicao = criarRequisicao({ mesReferencia: filtro });
+        if (!requisicao) {
           return;
         }
 
+        google.script.run
+          .withSuccessHandler(preencherResumo)
+          .withFailureHandler(function (erro) {
+            if (tratarErroDeSessao(erro)) {
+              return;
+            }
+            mostrarMensagem('Não foi possível carregar o resumo financeiro.', 'erro');
+          })
+          .getDashboardData(requisicao);
+      }
+
+      function preencherResumo(dados) {
+        const saldo = document.getElementById('saldoAtual');
+        const entradas = document.getElementById('totalEntradas');
+        const saidas = document.getElementById('totalSaidas');
+
+        if (saldo) {
+          saldo.textContent = formatadorMoeda.format((dados && dados.saldoAtual) || 0);
+        }
+        if (entradas) {
+          entradas.textContent = formatadorMoeda.format((dados && dados.totalEntradas) || 0);
+        }
+        if (saidas) {
+          saidas.textContent = formatadorMoeda.format((dados && dados.totalSaidas) || 0);
+        }
+      }
+
+      function carregarLancamentos() {
+        const requisicao = criarRequisicao({ limite: 20 });
+        if (!requisicao) {
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(preencherLancamentos)
+          .withFailureHandler(function (erro) {
+            if (tratarErroDeSessao(erro)) {
+              return;
+            }
+            console.error('Não foi possível carregar os lançamentos recentes.', erro);
+          })
+          .getLancamentosRecentes(requisicao);
+      }
+
+      function configurarSelecaoMes() {
+        const seletor = document.getElementById('mesResumo');
+        if (!seletor || seletor.dataset.configurado === 'true') {
+          return;
+        }
+
+        seletor.dataset.configurado = 'true';
         seletor.addEventListener('change', function () {
           carregarResumo(seletor.value);
         });
-
-        carregarMesesDisponiveis();
       }
 
-      /**
-       * Solicita a lista de meses disponíveis ao servidor.
-       */
       function carregarMesesDisponiveis() {
         const seletor = document.getElementById('mesResumo');
         if (!seletor) {
@@ -596,22 +987,24 @@
         }
 
         const valorAtual = seletor.value;
+        const requisicao = criarRequisicao({});
+        if (!requisicao) {
+          return;
+        }
 
         google.script.run
           .withSuccessHandler(function (meses) {
             preencherSeletorMeses(meses, valorAtual);
           })
-          .withFailureHandler(function () {
+          .withFailureHandler(function (erro) {
+            if (tratarErroDeSessao(erro)) {
+              return;
+            }
             preencherSeletorMeses([], valorAtual);
           })
-          .getMesesDisponiveis();
+          .getMesesDisponiveis(requisicao);
       }
 
-      /**
-       * Atualiza o seletor de meses com os valores informados.
-       * @param {Array<{valor: string, rotulo: string}>} meses
-       * @param {string} valorAnterior
-       */
       function preencherSeletorMeses(meses, valorAnterior) {
         const seletor = document.getElementById('mesResumo');
         if (!seletor) {
@@ -638,12 +1031,12 @@
         carregarResumo(seletor.value);
       }
 
-      /**
-       * Popula a tabela de lançamentos recentes com os dados recebidos.
-       * @param {Array<{tipo: string, data: string|Date, descricao: string, valor: number}>} lancamentos
-       */
       function preencherLancamentos(lancamentos) {
         const corpoTabela = document.getElementById('lancamentosBody');
+        if (!corpoTabela) {
+          return;
+        }
+
         corpoTabela.innerHTML = '';
 
         if (!lancamentos || lancamentos.length === 0) {
@@ -683,11 +1076,6 @@
         });
       }
 
-      /**
-       * Formata uma data para o formato dd/MM/yyyy.
-       * @param {Date} data
-       * @return {string}
-       */
       function formatarDataBrasileira(data) {
         if (!(data instanceof Date) || isNaN(data)) {
           return '-';
@@ -698,11 +1086,13 @@
         return `${dia}/${mes}/${ano}`;
       }
 
-      /**
-       * Configura o comportamento do formulário de novo lançamento.
-       */
       function configurarFormulario() {
         const formulario = document.getElementById('formLancamento');
+        if (!formulario || formulario.dataset.configurado === 'true') {
+          return;
+        }
+
+        formulario.dataset.configurado = 'true';
         formulario.addEventListener('submit', function (evento) {
           evento.preventDefault();
           enviarLancamento();
@@ -710,9 +1100,6 @@
         configurarBotoesCategorias();
       }
 
-      /**
-       * Configura os botões de atalho para preencher os dados do lançamento.
-       */
       function configurarBotoesCategorias() {
         const botoes = document.querySelectorAll('.botao-categoria');
         if (!botoes.length) {
@@ -727,7 +1114,16 @@
         }
 
         botoes.forEach(function (botao) {
+          if (botao.dataset.configurado === 'true') {
+            return;
+          }
+          botao.dataset.configurado = 'true';
+
           botao.addEventListener('click', function () {
+            if (botao.disabled) {
+              return;
+            }
+
             const exigeDetalhe = botao.dataset.exigeDetalhe === 'true';
             const permiteLivre = botao.dataset.permiteLivre === 'true';
             const focoPreferencia = botao.dataset.focus || (permiteLivre ? 'descricao' : 'valor');
@@ -774,10 +1170,17 @@
         });
       }
 
-      /**
-       * Lê os dados do formulário e envia um novo lançamento para o servidor.
-       */
       function enviarLancamento() {
+        if (!sessaoAtual) {
+          mostrarMensagem('Sessão expirada. Faça login novamente.', 'erro');
+          return;
+        }
+
+        if (sessaoAtual.papel === PAPEL_SOMENTE_LEITURA) {
+          mostrarMensagem('Seu usuário possui acesso somente leitura.', 'erro');
+          return;
+        }
+
         limparMensagens();
 
         const tipo = obterTipoLancamentoAtual();
@@ -801,7 +1204,9 @@
         }
 
         const botao = document.getElementById('salvarLancamento');
-        botao.disabled = true;
+        if (botao) {
+          botao.disabled = true;
+        }
         mostrarMensagem('Salvando lançamento...', 'info');
 
         const novoLancamento = {
@@ -811,9 +1216,20 @@
           valor: valor,
         };
 
+        const requisicao = criarRequisicao({ lancamento: novoLancamento });
+        if (!requisicao) {
+          if (botao) {
+            botao.disabled = false;
+          }
+          mostrarMensagem('Sessão expirada. Faça login novamente.', 'erro');
+          return;
+        }
+
         google.script.run
           .withSuccessHandler(function (resposta) {
-            botao.disabled = false;
+            if (botao) {
+              botao.disabled = false;
+            }
             if (resposta && resposta.success) {
               mostrarMensagem(resposta.message || 'Lançamento adicionado com sucesso.', 'sucesso');
               document.getElementById('descricaoLancamento').value = '';
@@ -827,18 +1243,74 @@
               );
             }
           })
-          .withFailureHandler(function () {
-            botao.disabled = false;
+          .withFailureHandler(function (erro) {
+            if (botao) {
+              botao.disabled = false;
+            }
+            if (tratarErroDeSessao(erro)) {
+              return;
+            }
             mostrarMensagem('Ocorreu um erro ao salvar o lançamento.', 'erro');
           })
-          .addLancamento(novoLancamento);
+          .addLancamento(requisicao);
       }
 
-      /**
-       * Exibe mensagens de status para o usuário.
-       * @param {string} mensagem
-       * @param {'sucesso'|'erro'|'info'} tipo
-       */
+      function criarRequisicao(payload) {
+        if (!sessaoAtual) {
+          return null;
+        }
+        const base = Object.assign({}, payload || {});
+        base.sessao = {
+          usuario: sessaoAtual.id,
+          token: sessaoAtual.token,
+        };
+        return base;
+      }
+
+      function tratarErroDeSessao(erro) {
+        const mensagem = extrairMensagemErro(erro);
+        if (mensagem && mensagem.toLowerCase().includes('sessão inválida')) {
+          realizarLogout(true, 'Sessão expirada. Faça login novamente.');
+          return true;
+        }
+        return false;
+      }
+
+      function extrairMensagemErro(erro) {
+        if (typeof erro === 'string') {
+          return erro;
+        }
+        if (erro && typeof erro.message === 'string') {
+          return erro.message;
+        }
+        return '';
+      }
+
+      function aplicarPermissoes() {
+        const formulario = document.getElementById('formLancamento');
+        if (!formulario) {
+          return;
+        }
+
+        const somenteLeitura = sessaoAtual && sessaoAtual.papel === PAPEL_SOMENTE_LEITURA;
+        const elementos = formulario.querySelectorAll('input, button, select, textarea');
+        elementos.forEach(function (elemento) {
+          if (elemento.id === 'statusInfo' || elemento.id === 'statusErro' || elemento.id === 'statusSucesso') {
+            return;
+          }
+          if (elemento.tagName === 'BUTTON' || elemento.tagName === 'INPUT' || elemento.tagName === 'SELECT') {
+            elemento.disabled = somenteLeitura;
+          }
+        });
+
+        formulario.classList.toggle('formulario-bloqueado', !!somenteLeitura);
+
+        const aviso = document.getElementById('avisoSomenteLeitura');
+        if (aviso) {
+          aviso.hidden = !somenteLeitura;
+        }
+      }
+
       function mostrarMensagem(mensagem, tipo) {
         limparMensagens();
 
@@ -854,25 +1326,24 @@
         }
 
         const elemento = document.getElementById(elementoId);
+        if (!elemento) {
+          return;
+        }
         elemento.textContent = mensagem;
         elemento.classList.add('ativo');
       }
 
-      /**
-       * Limpa todas as mensagens de status.
-       */
       function limparMensagens() {
         ['statusSucesso', 'statusErro', 'statusInfo'].forEach(function (id) {
           const elemento = document.getElementById(id);
+          if (!elemento) {
+            return;
+          }
           elemento.textContent = '';
           elemento.classList.remove('ativo');
         });
       }
 
-      /**
-       * Retorna informações do mês atual.
-       * @return {{valor: string, rotulo: string}}
-       */
       function obterMesAtualInfo() {
         const hoje = new Date();
         const ano = hoje.getFullYear();

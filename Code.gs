@@ -21,6 +21,24 @@ const NOMES_MESES = [
 ];
 const NOME_ABA_CLIENTES = 'Clientes Ativos';
 
+const PAPEL_COMPLETO = 'completo';
+const PAPEL_SOMENTE_LEITURA = 'leitura';
+
+const USUARIOS_CONFIG = {
+  bruno: {
+    senha: 'Cesar177*',
+    nome: 'Bruno',
+    papel: PAPEL_COMPLETO,
+  },
+  alexandre: {
+    senha: 'plus123',
+    nome: 'Alexandre',
+    papel: PAPEL_SOMENTE_LEITURA,
+  },
+};
+
+const PREFIXO_SESSAO = 'sessao.';
+
 /**
  * Função executada ao acessar o web app.
  * Carrega o template HTML principal e configura metadados da página.
@@ -46,6 +64,189 @@ function include(filename) {
 }
 
 /**
+ * Realiza a autenticação de um usuário e gera um token de sessão persistente.
+ *
+ * @param {{usuario: string, senha: string}} credenciais
+ * @return {{success: boolean, message?: string, token?: string, usuario?: {id: string, nome: string, papel: string}}}
+ */
+function login(credenciais) {
+  if (!credenciais || typeof credenciais.usuario !== 'string' || typeof credenciais.senha !== 'string') {
+    return { success: false, message: 'Informe usuário e senha.' };
+  }
+
+  const usuarioId = credenciais.usuario.trim().toLowerCase();
+  const senhaInformada = credenciais.senha;
+  const configuracao = USUARIOS_CONFIG[usuarioId];
+
+  if (!configuracao || configuracao.senha !== senhaInformada) {
+    return { success: false, message: 'Usuário ou senha inválidos.' };
+  }
+
+  const token = Utilities.getUuid();
+  registrarSessaoAtiva(usuarioId, token);
+
+  return {
+    success: true,
+    token: token,
+    usuario: {
+      id: usuarioId,
+      nome: configuracao.nome,
+      papel: configuracao.papel,
+    },
+  };
+}
+
+/**
+ * Valida uma sessão existente.
+ *
+ * @param {{usuario: string, token: string}} sessao
+ * @return {{success: boolean, message?: string, token?: string, usuario?: {id: string, nome: string, papel: string}}}
+ */
+function validarSessao(sessao) {
+  const validacao = validarSessaoInterno(sessao);
+  if (!validacao.valida) {
+    return { success: false, message: 'Sessão inválida. Faça login novamente.' };
+  }
+
+  return {
+    success: true,
+    token: validacao.token,
+    usuario: {
+      id: validacao.id,
+      nome: validacao.nome,
+      papel: validacao.papel,
+    },
+  };
+}
+
+/**
+ * Encerra uma sessão ativa.
+ *
+ * @param {{usuario: string, token: string}} sessao
+ * @return {{success: boolean}}
+ */
+function logout(sessao) {
+  const validacao = validarSessaoInterno(sessao);
+  if (validacao.valida) {
+    removerSessaoAtiva(validacao.id);
+  }
+  return { success: true };
+}
+
+/**
+ * Confere se a sessão informada é válida.
+ *
+ * @param {{usuario: string, token: string}} sessao
+ * @return {{valida: boolean, id?: string, nome?: string, papel?: string, token?: string}}
+ */
+function validarSessaoInterno(sessao) {
+  if (!sessao || typeof sessao.usuario !== 'string' || typeof sessao.token !== 'string') {
+    return { valida: false };
+  }
+
+  const usuarioId = sessao.usuario.trim().toLowerCase();
+  const configuracao = USUARIOS_CONFIG[usuarioId];
+
+  if (!configuracao) {
+    return { valida: false };
+  }
+
+  const registro = obterRegistroSessao(usuarioId);
+  if (!registro || registro.token !== sessao.token) {
+    return { valida: false };
+  }
+
+  return {
+    valida: true,
+    id: usuarioId,
+    nome: configuracao.nome,
+    papel: configuracao.papel,
+    token: registro.token,
+  };
+}
+
+/**
+ * Prepara o contexto de execução validando a sessão informada.
+ *
+ * @param {Object} argumento Parâmetros recebidos do front-end.
+ * @param {boolean} exigeEscrita Indica se a operação exige permissão de escrita.
+ * @return {{parametros: Object, sessao: {id: string, nome: string, papel: string, token: string}}}
+ */
+function prepararContexto(argumento, exigeEscrita) {
+  const parametros = argumento && typeof argumento === 'object' ? Object.assign({}, argumento) : {};
+  const sessaoInformada = parametros.sessao || null;
+
+  if (sessaoInformada) {
+    delete parametros.sessao;
+  }
+
+  const validacao = validarSessaoInterno(sessaoInformada);
+
+  if (!validacao.valida) {
+    throw new Error('Sessão inválida.');
+  }
+
+  if (exigeEscrita && validacao.papel === PAPEL_SOMENTE_LEITURA) {
+    throw new Error('Permissão insuficiente para realizar esta operação.');
+  }
+
+  return {
+    parametros: parametros,
+    sessao: validacao,
+  };
+}
+
+/**
+ * Persiste um token de sessão para o usuário informado.
+ *
+ * @param {string} usuarioId
+ * @param {string} token
+ */
+function registrarSessaoAtiva(usuarioId, token) {
+  const propriedade = PREFIXO_SESSAO + usuarioId;
+  PropertiesService.getScriptProperties().setProperty(
+    propriedade,
+    JSON.stringify({ token: token, atualizadoEm: new Date().toISOString() })
+  );
+}
+
+/**
+ * Recupera os dados persistidos da sessão do usuário.
+ *
+ * @param {string} usuarioId
+ * @return {{token: string, atualizadoEm: string}|null}
+ */
+function obterRegistroSessao(usuarioId) {
+  if (!usuarioId) {
+    return null;
+  }
+
+  const propriedade = PropertiesService.getScriptProperties().getProperty(PREFIXO_SESSAO + usuarioId);
+  if (!propriedade) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(propriedade);
+  } catch (erro) {
+    Logger.log('Erro ao ler sessão: ' + erro);
+    return null;
+  }
+}
+
+/**
+ * Remove a sessão armazenada do usuário.
+ *
+ * @param {string} usuarioId
+ */
+function removerSessaoAtiva(usuarioId) {
+  if (!usuarioId) {
+    return;
+  }
+  PropertiesService.getScriptProperties().deleteProperty(PREFIXO_SESSAO + usuarioId);
+}
+
+/**
  * Retorna a primeira aba disponível dentre os nomes informados.
  *
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet Planilha ativa.
@@ -68,15 +269,90 @@ function obterAbaPorNomes(spreadsheet, nomes) {
 }
 
 /**
+ * Retorna a aba correspondente aos nomes informados ou cria uma nova com o nome padrão.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {string[]} nomes
+ * @param {string} nomePadrao
+ * @return {GoogleAppsScript.Spreadsheet.Sheet|null}
+ */
+function obterAbaPorNomesOuCriar(spreadsheet, nomes, nomePadrao) {
+  var sheet = obterAbaPorNomes(spreadsheet, nomes);
+  if (sheet) {
+    configurarEstruturaAba(sheet, true);
+    return sheet;
+  }
+  return criarAbaPadrao(spreadsheet, nomePadrao);
+}
+
+/**
+ * Cria uma aba padrão com cabeçalho e formatação básica.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {string} nomePadrao
+ * @return {GoogleAppsScript.Spreadsheet.Sheet|null}
+ */
+function criarAbaPadrao(spreadsheet, nomePadrao) {
+  if (!spreadsheet || !nomePadrao) {
+    return null;
+  }
+
+  var sheetExistente = spreadsheet.getSheetByName(nomePadrao);
+  if (sheetExistente) {
+    configurarEstruturaAba(sheetExistente, true);
+    return sheetExistente;
+  }
+
+  var sheet = spreadsheet.insertSheet(nomePadrao);
+  configurarEstruturaAba(sheet, false);
+  return sheet;
+}
+
+/**
+ * Garante que a aba possua o cabeçalho e formatação esperados.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {boolean} preservarCabecalho Existindo cabeçalho, evita sobrescrever valores.
+ */
+function configurarEstruturaAba(sheet, preservarCabecalho) {
+  if (!sheet) {
+    return;
+  }
+
+  var intervaloCabecalho = sheet.getRange(4, 1, 1, 3);
+  var valoresAtuais = intervaloCabecalho.getValues();
+
+  if (!preservarCabecalho || !valoresAtuais || valoresAtuais.length === 0) {
+    intervaloCabecalho.setValues([['Data', 'Descrição', 'Valor']]);
+  } else {
+    var linha = valoresAtuais[0] || [];
+    if (!linha[0] || !linha[1] || !linha[2]) {
+      intervaloCabecalho.setValues([['Data', 'Descrição', 'Valor']]);
+    }
+  }
+
+  sheet.getRange('A:A').setNumberFormat('dd/MM/yyyy');
+  sheet.getRange('C:C').setNumberFormat('R$ #,##0.00');
+  sheet.setFrozenRows(4);
+}
+
+/**
  * Recupera os dados do resumo financeiro para o dashboard.
  *
  * @param {string} [mesReferencia] Mês no formato yyyy-MM para filtrar os dados.
  * @return {{saldoAtual: number, totalEntradas: number, totalSaidas: number}}
  */
-function getDashboardData(mesReferencia) {
+function getDashboardData(requisicao) {
+  const contexto = prepararContexto(requisicao, false);
+  const mesReferencia = contexto.parametros.mesReferencia;
+
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
-  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
+  const sheetEntradas = obterAbaPorNomesOuCriar(
+    spreadsheet,
+    NOMES_POSSIVEIS_ENTRADAS,
+    'Entradas'
+  );
+  const sheetSaidas = obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_SAIDAS, 'Saídas');
 
   const lancamentosEntradas = lerLancamentosDaAba(sheetEntradas, 'Entrada');
   const lancamentosSaidas = lerLancamentosDaAba(sheetSaidas, 'Saída');
@@ -104,11 +380,17 @@ function getDashboardData(mesReferencia) {
  * @param {number} [limit=20] Quantidade máxima de lançamentos.
  * @return {Array<{tipo: string, data: Date, descricao: string, valor: number}>}
  */
-function getLancamentosRecentes(limit) {
-  const maxRegistros = limit || 20;
+function getLancamentosRecentes(requisicao) {
+  const contexto = prepararContexto(requisicao, false);
+  const maxRegistros = Number(contexto.parametros.limite || contexto.parametros.limit || 20);
+
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
-  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
+  const sheetEntradas = obterAbaPorNomesOuCriar(
+    spreadsheet,
+    NOMES_POSSIVEIS_ENTRADAS,
+    'Entradas'
+  );
+  const sheetSaidas = obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_SAIDAS, 'Saídas');
 
   const lancamentos = [];
   lancamentos.push.apply(lancamentos, lerLancamentosDaAba(sheetEntradas, 'Entrada'));
@@ -126,10 +408,16 @@ function getLancamentosRecentes(limit) {
  *
  * @return {Array<{valor: string, rotulo: string}>}
  */
-function getMesesDisponiveis() {
+function getMesesDisponiveis(requisicao) {
+  prepararContexto(requisicao, false);
+
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
-  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
+  const sheetEntradas = obterAbaPorNomesOuCriar(
+    spreadsheet,
+    NOMES_POSSIVEIS_ENTRADAS,
+    'Entradas'
+  );
+  const sheetSaidas = obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_SAIDAS, 'Saídas');
 
   const meses = {};
 
@@ -209,8 +497,18 @@ function lerLancamentosDaAba(sheet, tipo) {
  * @param {{tipo: string, data: string, descricao: string, valor: number}} lancamento Lançamento informado pelo front-end.
  * @return {{success: boolean, message: string}}
  */
-function addLancamento(lancamento) {
+function addLancamento(requisicao) {
   try {
+    const contexto = prepararContexto(requisicao, true);
+    const lancamento = contexto.parametros.lancamento;
+
+    if (!lancamento) {
+      return {
+        success: false,
+        message: 'Dados do lançamento não informados.',
+      };
+    }
+
     const spreadsheet = SpreadsheetApp.getActive();
     const sheet = obterAbaPorTipo(lancamento.tipo, spreadsheet);
 
@@ -250,10 +548,10 @@ function addLancamento(lancamento) {
  */
 function obterAbaPorTipo(tipo, spreadsheet) {
   if (tipo === 'Entrada') {
-    return obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
+    return obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_ENTRADAS, 'Entradas');
   }
   if (tipo === 'Saída') {
-    return obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
+    return obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_SAIDAS, 'Saídas');
   }
   return null;
 }
