@@ -26,6 +26,10 @@
         color: var(--cor-texto);
       }
 
+      .oculto {
+        display: none !important;
+      }
+
       header {
         background: linear-gradient(135deg, #0d47a1, #1976d2);
         color: #ffffff;
@@ -38,6 +42,60 @@
         margin: 0;
         font-size: 1.8rem;
         letter-spacing: 0.5px;
+      }
+
+      .login-container {
+        max-width: 360px;
+        margin: 3rem auto 2rem;
+        background-color: var(--cor-card);
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 8px 18px rgba(13, 71, 161, 0.12);
+      }
+
+      .login-container h2 {
+        margin: 0 0 1.5rem;
+        text-align: center;
+        font-size: 1.35rem;
+      }
+
+      .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .login-form label {
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+      }
+
+      .login-form input[type='text'],
+      .login-form input[type='password'] {
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--cor-borda);
+        border-radius: 8px;
+        font-size: 1rem;
+      }
+
+      .login-form input:focus {
+        border-color: var(--cor-saldo);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.2);
+      }
+
+      .login-form button {
+        width: 100%;
+        align-self: stretch;
+        justify-content: center;
+      }
+
+      .login-mensagem {
+        min-height: 1.25rem;
+        text-align: center;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--cor-saidas);
       }
 
       main {
@@ -53,6 +111,48 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1.5rem;
+      }
+
+      .usuario-info {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        background-color: var(--cor-card);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      }
+
+      .usuario-info span {
+        font-weight: 600;
+      }
+
+      button.botao-sair {
+        background-color: transparent;
+        color: var(--cor-texto);
+        border: 1px solid var(--cor-borda);
+        padding: 0.45rem 0.9rem;
+        align-self: center;
+      }
+
+      button.botao-sair:hover {
+        background-color: rgba(13, 71, 161, 0.08);
+        transform: none;
+      }
+
+      .aviso-somente-leitura {
+        margin: 0.75rem 0 1.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background-color: rgba(229, 57, 53, 0.1);
+        color: #b71c1c;
+        font-weight: 600;
+      }
+
+      #formLancamento.somente-leitura {
+        opacity: 0.6;
       }
 
       .controle-mes {
@@ -309,7 +409,29 @@
     <header>
       <h1>Plus Podcast - Finanças</h1>
     </header>
-    <main>
+    <div id="loginContainer" class="login-container oculto" aria-live="polite">
+      <h2>Faça login para continuar</h2>
+      <form id="formLogin" class="login-form">
+        <div>
+          <label for="loginUsuario">Usuário</label>
+          <input id="loginUsuario" type="text" autocomplete="username" required />
+        </div>
+        <div>
+          <label for="loginSenha">Senha</label>
+          <input id="loginSenha" type="password" autocomplete="current-password" required />
+        </div>
+        <button type="submit">Entrar</button>
+        <p id="loginMensagem" class="login-mensagem" role="alert"></p>
+      </form>
+    </div>
+    <main id="conteudoPrincipal" class="oculto">
+      <div class="usuario-info" id="usuarioInfo" aria-live="polite">
+        <span id="usuarioDescricao"></span>
+        <button type="button" id="logoutButton" class="botao-sair oculto">Trocar usuário</button>
+      </div>
+      <p id="avisoSomenteLeitura" class="aviso-somente-leitura oculto">
+        Você está acessando com permissões de consulta. Novos lançamentos estão desativados.
+      </p>
       <section aria-labelledby="resumo-titulo">
         <h2 id="resumo-titulo">Resumo Financeiro</h2>
         <div class="controle-mes">
@@ -480,15 +602,342 @@
         'Dezembro',
       ];
 
+      const STORAGE_TOKEN_KEY = 'plus_podcast_auth_token';
+      let tokenAtual = null;
+      let usuarioAtual = null;
+      let appInicializado = false;
+      let formularioConfigurado = false;
+      let seletorMesConfigurado = false;
+
       /**
        * Inicializa a página ao terminar de carregar.
        */
       window.onload = function () {
-        definirDataPadrao();
-        configurarSelecaoMes();
-        carregarLancamentos();
-        configurarFormulario();
+        configurarLogin();
+        verificarSessaoSalva();
       };
+
+      /**
+       * Configura eventos iniciais relacionados ao fluxo de autenticação.
+       */
+      function configurarLogin() {
+        const formulario = document.getElementById('formLogin');
+        if (formulario) {
+          formulario.addEventListener('submit', processarLogin);
+        }
+
+        const botaoSair = document.getElementById('logoutButton');
+        if (botaoSair) {
+          botaoSair.addEventListener('click', function () {
+            encerrarSessao(true);
+          });
+        }
+      }
+
+      /**
+       * Verifica se existe uma sessão salva localmente e tenta restaurá-la.
+       */
+      function verificarSessaoSalva() {
+        const tokenSalvo = localStorage.getItem(STORAGE_TOKEN_KEY);
+
+        if (!tokenSalvo) {
+          mostrarTelaLogin();
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            if (resposta && resposta.valid) {
+              tokenAtual = resposta.token || tokenSalvo;
+              usuarioAtual = resposta.usuario || null;
+              localStorage.setItem(STORAGE_TOKEN_KEY, tokenAtual);
+              atualizarInformacoesUsuario();
+              aplicarRegrasUsuario();
+              inicializarAplicacao();
+              mostrarAplicacao();
+            } else {
+              localStorage.removeItem(STORAGE_TOKEN_KEY);
+              mostrarTelaLogin();
+            }
+          })
+          .withFailureHandler(function () {
+            localStorage.removeItem(STORAGE_TOKEN_KEY);
+            mostrarTelaLogin();
+          })
+          .validarSessao(tokenSalvo);
+      }
+
+      /**
+       * Inicializa componentes do aplicativo após autenticação válida.
+       */
+      function inicializarAplicacao() {
+        definirDataPadrao();
+
+        if (!appInicializado) {
+          configurarSelecaoMes();
+          configurarFormulario();
+          appInicializado = true;
+        } else {
+          configurarSelecaoMes();
+        }
+
+        carregarLancamentos();
+      }
+
+      /**
+       * Processa o envio do formulário de login.
+       * @param {SubmitEvent} evento
+       */
+      function processarLogin(evento) {
+        if (evento && typeof evento.preventDefault === 'function') {
+          evento.preventDefault();
+        }
+
+        const formulario = document.getElementById('formLogin');
+        if (!formulario) {
+          return;
+        }
+
+        const usuario = (document.getElementById('loginUsuario').value || '').trim();
+        const senha = document.getElementById('loginSenha').value || '';
+
+        if (!usuario || !senha) {
+          exibirErroLogin('Informe usuário e senha.');
+          return;
+        }
+
+        const botao = formulario.querySelector('button[type="submit"]');
+        if (botao) {
+          botao.disabled = true;
+        }
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            if (botao) {
+              botao.disabled = false;
+            }
+
+            if (resposta && resposta.success) {
+              tokenAtual = resposta.token;
+              usuarioAtual = resposta.usuario || null;
+              localStorage.setItem(STORAGE_TOKEN_KEY, tokenAtual);
+              formulario.reset();
+              limparErroLogin();
+              atualizarInformacoesUsuario();
+              aplicarRegrasUsuario();
+              inicializarAplicacao();
+              mostrarAplicacao();
+            } else {
+              exibirErroLogin((resposta && resposta.message) || 'Usuário ou senha inválidos.');
+            }
+          })
+          .withFailureHandler(function (erro) {
+            if (botao) {
+              botao.disabled = false;
+            }
+            exibirErroLogin('Não foi possível efetuar o login. Tente novamente.');
+            console.error(erro);
+          })
+          .autenticarUsuario({ usuario: usuario, senha: senha });
+      }
+
+      /**
+       * Exibe a interface principal do aplicativo.
+       */
+      function mostrarAplicacao() {
+        const main = document.getElementById('conteudoPrincipal');
+        const login = document.getElementById('loginContainer');
+        if (login) {
+          login.classList.add('oculto');
+        }
+        if (main) {
+          main.classList.remove('oculto');
+        }
+        limparErroLogin();
+        limparMensagens();
+      }
+
+      /**
+       * Mostra a tela de login e oculta o conteúdo protegido.
+       */
+      function mostrarTelaLogin() {
+        const main = document.getElementById('conteudoPrincipal');
+        const login = document.getElementById('loginContainer');
+        if (main) {
+          main.classList.add('oculto');
+        }
+        if (login) {
+          login.classList.remove('oculto');
+        }
+        aplicarRegrasUsuario();
+
+        const usuarioInput = document.getElementById('loginUsuario');
+        if (usuarioInput) {
+          usuarioInput.focus();
+        }
+      }
+
+      /**
+       * Atualiza informações visuais do usuário logado.
+       */
+      function atualizarInformacoesUsuario() {
+        const descricao = document.getElementById('usuarioDescricao');
+        const botaoSair = document.getElementById('logoutButton');
+
+        if (descricao) {
+          if (usuarioAtual) {
+            const papelDescricao = usuarioAtual.papel === 'admin' ? 'acesso total' : 'somente leitura';
+            descricao.textContent = `Usuário: ${usuarioAtual.nome} (${papelDescricao})`;
+          } else {
+            descricao.textContent = '';
+          }
+        }
+
+        if (botaoSair) {
+          if (usuarioAtual) {
+            botaoSair.classList.remove('oculto');
+          } else {
+            botaoSair.classList.add('oculto');
+          }
+        }
+      }
+
+      /**
+       * Ajusta a disponibilidade do formulário conforme o perfil do usuário.
+       */
+      function aplicarRegrasUsuario() {
+        const somenteConsulta = !usuarioAtual || usuarioAtual.papel !== 'admin';
+        definirDisponibilidadeFormularioLancamento(somenteConsulta);
+
+        const aviso = document.getElementById('avisoSomenteLeitura');
+        if (aviso) {
+          if (usuarioAtual && somenteConsulta) {
+            aviso.classList.remove('oculto');
+          } else {
+            aviso.classList.add('oculto');
+          }
+        }
+      }
+
+      /**
+       * Habilita ou desabilita os campos do formulário de lançamentos.
+       * @param {boolean} desabilitar
+       */
+      function definirDisponibilidadeFormularioLancamento(desabilitar) {
+        const formulario = document.getElementById('formLancamento');
+        if (!formulario) {
+          return;
+        }
+
+        const elementos = formulario.querySelectorAll('input, select, button');
+        elementos.forEach(function (elemento) {
+          elemento.disabled = desabilitar;
+        });
+
+        formulario.classList.toggle('somente-leitura', desabilitar);
+      }
+
+      /**
+       * Finaliza a sessão atual e retorna à tela de login.
+       * @param {boolean} solicitadoPeloUsuario
+       */
+      function encerrarSessao(solicitadoPeloUsuario) {
+        const tokenAnterior = tokenAtual;
+
+        tokenAtual = null;
+        usuarioAtual = null;
+        localStorage.removeItem(STORAGE_TOKEN_KEY);
+
+        if (tokenAnterior) {
+          google.script.run.encerrarSessao(tokenAnterior);
+        }
+
+        atualizarInformacoesUsuario();
+        aplicarRegrasUsuario();
+        limparMensagens();
+
+        const formularioLancamento = document.getElementById('formLancamento');
+        if (formularioLancamento) {
+          formularioLancamento.reset();
+        }
+
+        mostrarTelaLogin();
+
+        const formulario = document.getElementById('formLogin');
+        if (formulario) {
+          formulario.reset();
+        }
+
+        if (solicitadoPeloUsuario) {
+          const usuarioInput = document.getElementById('loginUsuario');
+          if (usuarioInput) {
+            usuarioInput.focus();
+          }
+        }
+      }
+
+      /**
+       * Exibe mensagem de erro relacionada ao login.
+       * @param {string} mensagem
+       */
+      function exibirErroLogin(mensagem) {
+        const alvo = document.getElementById('loginMensagem');
+        if (alvo) {
+          alvo.textContent = mensagem || '';
+        }
+      }
+
+      /**
+       * Limpa a mensagem de erro do login.
+       */
+      function limparErroLogin() {
+        exibirErroLogin('');
+      }
+
+      /**
+       * Trata erros vindos do servidor e identifica perda de sessão.
+       * @param {*} erro
+       * @param {string} mensagemPadrao
+       * @return {boolean} Indica se a sessão foi encerrada.
+       */
+      function tratarErroPadrao(erro, mensagemPadrao) {
+        const mensagem = extrairMensagemErro(erro);
+        const sessaoInvalida = mensagem && mensagem.toLowerCase().indexOf('sessão inválida') !== -1;
+
+        if (sessaoInvalida) {
+          const aviso = 'Sua sessão expirou. Faça login novamente.';
+          mostrarMensagem(aviso, 'erro');
+          exibirErroLogin(aviso);
+          encerrarSessao(false);
+          return true;
+        }
+
+        if (mensagemPadrao) {
+          mostrarMensagem(mensagemPadrao, 'erro');
+        } else if (mensagem) {
+          mostrarMensagem(mensagem, 'erro');
+        }
+
+        return false;
+      }
+
+      /**
+       * Extrai a mensagem de um objeto de erro retornado pelo Apps Script.
+       * @param {*} erro
+       * @return {string}
+       */
+      function extrairMensagemErro(erro) {
+        if (!erro) {
+          return '';
+        }
+        if (typeof erro === 'string') {
+          return erro;
+        }
+        if (erro.message) {
+          return erro.message;
+        }
+        return '';
+      }
 
       /**
        * Define a data atual como valor padrão do campo de data.
@@ -505,16 +954,20 @@
        * Solicita os dados de resumo financeiro ao servidor.
        */
       function carregarResumo(mesReferencia) {
+        if (!tokenAtual) {
+          return;
+        }
+
         const seletorMes = document.getElementById('mesResumo');
         const filtro =
           mesReferencia || (seletorMes ? seletorMes.value : obterMesAtualInfo().valor);
 
         google.script.run
           .withSuccessHandler(preencherResumo)
-          .withFailureHandler(function () {
-            mostrarMensagem('Não foi possível carregar o resumo financeiro.', 'erro');
+          .withFailureHandler(function (erro) {
+            tratarErroPadrao(erro, 'Não foi possível carregar o resumo financeiro.');
           })
-          .getDashboardData(filtro);
+          .getDashboardData(filtro, tokenAtual);
       }
 
       /**
@@ -531,12 +984,16 @@
        * Solicita os lançamentos recentes ao servidor.
        */
       function carregarLancamentos() {
+        if (!tokenAtual) {
+          return;
+        }
+
         google.script.run
           .withSuccessHandler(preencherLancamentos)
-          .withFailureHandler(function () {
-            mostrarMensagem('Não foi possível carregar os lançamentos recentes.', 'erro');
+          .withFailureHandler(function (erro) {
+            tratarErroPadrao(erro, 'Não foi possível carregar os lançamentos recentes.');
           })
-          .getLancamentosRecentes(20);
+          .getLancamentosRecentes(20, tokenAtual);
       }
 
       /**
@@ -548,9 +1005,12 @@
           return;
         }
 
-        seletor.addEventListener('change', function () {
-          carregarResumo(seletor.value);
-        });
+        if (!seletorMesConfigurado) {
+          seletor.addEventListener('change', function () {
+            carregarResumo(seletor.value);
+          });
+          seletorMesConfigurado = true;
+        }
 
         carregarMesesDisponiveis();
       }
@@ -559,6 +1019,10 @@
        * Solicita a lista de meses disponíveis ao servidor.
        */
       function carregarMesesDisponiveis() {
+        if (!tokenAtual) {
+          return;
+        }
+
         const seletor = document.getElementById('mesResumo');
         if (!seletor) {
           return;
@@ -570,10 +1034,16 @@
           .withSuccessHandler(function (meses) {
             preencherSeletorMeses(meses, valorAtual);
           })
-          .withFailureHandler(function () {
-            preencherSeletorMeses([], valorAtual);
+          .withFailureHandler(function (erro) {
+            const sessaoEncerrada = tratarErroPadrao(
+              erro,
+              'Não foi possível carregar os meses disponíveis.'
+            );
+            if (!sessaoEncerrada) {
+              preencherSeletorMeses([], valorAtual);
+            }
           })
-          .getMesesDisponiveis();
+          .getMesesDisponiveis(tokenAtual);
       }
 
       /**
@@ -671,12 +1141,21 @@
        * Configura o comportamento do formulário de novo lançamento.
        */
       function configurarFormulario() {
+        if (formularioConfigurado) {
+          return;
+        }
+
         const formulario = document.getElementById('formLancamento');
+        if (!formulario) {
+          return;
+        }
+
         formulario.addEventListener('submit', function (evento) {
           evento.preventDefault();
           enviarLancamento();
         });
         configurarBotoesCategorias();
+        formularioConfigurado = true;
       }
 
       /**
@@ -762,6 +1241,17 @@
       function enviarLancamento() {
         limparMensagens();
 
+        if (!usuarioAtual || !tokenAtual) {
+          mostrarMensagem('Sua sessão expirou. Faça login novamente.', 'erro');
+          encerrarSessao(false);
+          return;
+        }
+
+        if (usuarioAtual.papel !== 'admin') {
+          mostrarMensagem('Seu usuário possui acesso apenas para consulta.', 'erro');
+          return;
+        }
+
         const tipo = document.getElementById('tipoLancamento').value;
         const data = document.getElementById('dataLancamento').value;
         const descricao = document.getElementById('descricaoLancamento').value.trim();
@@ -804,11 +1294,11 @@
               );
             }
           })
-          .withFailureHandler(function () {
+          .withFailureHandler(function (erro) {
             botao.disabled = false;
-            mostrarMensagem('Ocorreu um erro ao salvar o lançamento.', 'erro');
+            tratarErroPadrao(erro, 'Ocorreu um erro ao salvar o lançamento.');
           })
-          .addLancamento(novoLancamento);
+          .addLancamento(novoLancamento, tokenAtual);
       }
 
       /**
