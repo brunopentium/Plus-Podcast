@@ -55,6 +55,23 @@
         gap: 1.5rem;
       }
 
+      .controle-mes {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .controle-mes label {
+        font-weight: 600;
+      }
+
+      .controle-mes select {
+        min-width: 180px;
+        max-width: 260px;
+      }
+
       .card {
         background-color: var(--cor-card);
         border-radius: 12px;
@@ -249,6 +266,10 @@
     <main>
       <section aria-labelledby="resumo-titulo">
         <h2 id="resumo-titulo">Resumo Financeiro</h2>
+        <div class="controle-mes">
+          <label for="mesResumo">Selecionar mês</label>
+          <select id="mesResumo" aria-label="Selecionar mês para o resumo"></select>
+        </div>
         <div class="cards-container">
           <div class="card saldo">
             <h3>Saldo atual</h3>
@@ -325,12 +346,27 @@
         currency: 'BRL',
       });
 
+      const NOMES_MESES = [
+        'Janeiro',
+        'Fevereiro',
+        'Março',
+        'Abril',
+        'Maio',
+        'Junho',
+        'Julho',
+        'Agosto',
+        'Setembro',
+        'Outubro',
+        'Novembro',
+        'Dezembro',
+      ];
+
       /**
        * Inicializa a página ao terminar de carregar.
        */
       window.onload = function () {
         definirDataPadrao();
-        carregarResumo();
+        configurarSelecaoMes();
         carregarLancamentos();
         configurarFormulario();
       };
@@ -349,13 +385,17 @@
       /**
        * Solicita os dados de resumo financeiro ao servidor.
        */
-      function carregarResumo() {
+      function carregarResumo(mesReferencia) {
+        const seletorMes = document.getElementById('mesResumo');
+        const filtro =
+          mesReferencia || (seletorMes ? seletorMes.value : obterMesAtualInfo().valor);
+
         google.script.run
           .withSuccessHandler(preencherResumo)
           .withFailureHandler(function () {
             mostrarMensagem('Não foi possível carregar o resumo financeiro.', 'erro');
           })
-          .getDashboardData();
+          .getDashboardData(filtro);
       }
 
       /**
@@ -378,6 +418,74 @@
             mostrarMensagem('Não foi possível carregar os lançamentos recentes.', 'erro');
           })
           .getLancamentosRecentes(20);
+      }
+
+      /**
+       * Configura e carrega as opções de meses disponíveis para o resumo.
+       */
+      function configurarSelecaoMes() {
+        const seletor = document.getElementById('mesResumo');
+        if (!seletor) {
+          return;
+        }
+
+        seletor.addEventListener('change', function () {
+          carregarResumo(seletor.value);
+        });
+
+        carregarMesesDisponiveis();
+      }
+
+      /**
+       * Solicita a lista de meses disponíveis ao servidor.
+       */
+      function carregarMesesDisponiveis() {
+        const seletor = document.getElementById('mesResumo');
+        if (!seletor) {
+          return;
+        }
+
+        const valorAtual = seletor.value;
+
+        google.script.run
+          .withSuccessHandler(function (meses) {
+            preencherSeletorMeses(meses, valorAtual);
+          })
+          .withFailureHandler(function () {
+            preencherSeletorMeses([], valorAtual);
+          })
+          .getMesesDisponiveis();
+      }
+
+      /**
+       * Atualiza o seletor de meses com os valores informados.
+       * @param {Array<{valor: string, rotulo: string}>} meses
+       * @param {string} valorAnterior
+       */
+      function preencherSeletorMeses(meses, valorAnterior) {
+        const seletor = document.getElementById('mesResumo');
+        if (!seletor) {
+          return;
+        }
+
+        const lista = Array.isArray(meses) && meses.length > 0 ? meses : [obterMesAtualInfo()];
+
+        seletor.innerHTML = '';
+
+        lista.forEach(function (item) {
+          const opcao = document.createElement('option');
+          opcao.value = item.valor;
+          opcao.textContent = item.rotulo;
+          seletor.appendChild(opcao);
+        });
+
+        const existeAnterior = lista.some(function (item) {
+          return item.valor === valorAnterior;
+        });
+
+        seletor.value = existeAnterior ? valorAnterior : lista[0].valor;
+
+        carregarResumo(seletor.value);
       }
 
       /**
@@ -490,7 +598,7 @@
               mostrarMensagem(resposta.message || 'Lançamento adicionado com sucesso.', 'sucesso');
               document.getElementById('descricaoLancamento').value = '';
               document.getElementById('valorLancamento').value = '';
-              carregarResumo();
+              carregarMesesDisponiveis();
               carregarLancamentos();
             } else {
               mostrarMensagem(
@@ -539,6 +647,20 @@
           elemento.textContent = '';
           elemento.classList.remove('ativo');
         });
+      }
+
+      /**
+       * Retorna informações do mês atual.
+       * @return {{valor: string, rotulo: string}}
+       */
+      function obterMesAtualInfo() {
+        const hoje = new Date();
+        const ano = hoje.getFullYear();
+        const mes = hoje.getMonth();
+        return {
+          valor: `${ano}-${String(mes + 1).padStart(2, '0')}`,
+          rotulo: `${NOMES_MESES[mes]} de ${ano}`,
+        };
       }
     </script>
   </body>

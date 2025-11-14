@@ -3,9 +3,22 @@
  */
 
 // Nome das abas utilizadas na planilha.
-const NOME_ABA_RESULTADO = 'Resultado';
-const NOME_ABA_SAIDAS = 'Saidas';
-const NOME_ABA_ENTRADAS = 'Entradas';
+const NOMES_POSSIVEIS_SAIDAS = ['Saídas', 'Saidas'];
+const NOMES_POSSIVEIS_ENTRADAS = ['Entradas'];
+const NOMES_MESES = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
 const NOME_ABA_CLIENTES = 'Clientes Ativos';
 
 /**
@@ -33,50 +46,56 @@ function include(filename) {
 }
 
 /**
+ * Retorna a primeira aba disponível dentre os nomes informados.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet Planilha ativa.
+ * @param {string[]} nomes Lista de nomes possíveis da aba.
+ * @return {GoogleAppsScript.Spreadsheet.Sheet|null}
+ */
+function obterAbaPorNomes(spreadsheet, nomes) {
+  if (!spreadsheet || !Array.isArray(nomes)) {
+    return null;
+  }
+
+  for (var i = 0; i < nomes.length; i++) {
+    var sheet = spreadsheet.getSheetByName(nomes[i]);
+    if (sheet) {
+      return sheet;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Recupera os dados do resumo financeiro para o dashboard.
  *
+ * @param {string} [mesReferencia] Mês no formato yyyy-MM para filtrar os dados.
  * @return {{saldoAtual: number, totalEntradas: number, totalSaidas: number}}
  */
-function getDashboardData() {
+function getDashboardData(mesReferencia) {
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheetResultado = spreadsheet.getSheetByName(NOME_ABA_RESULTADO);
-  const saldoAtual = Number(sheetResultado.getRange(2, 3).getValue()) || 0;
+  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
+  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
 
-  const totalEntradas = somarValoresColuna(spreadsheet.getSheetByName(NOME_ABA_ENTRADAS));
-  const totalSaidas = somarValoresColuna(spreadsheet.getSheetByName(NOME_ABA_SAIDAS));
+  const lancamentosEntradas = lerLancamentosDaAba(sheetEntradas, 'Entrada');
+  const lancamentosSaidas = lerLancamentosDaAba(sheetSaidas, 'Saída');
+
+  const referencia = obterReferenciaMes(mesReferencia);
+  const inicioMes = new Date(referencia.ano, referencia.mes, 1);
+  const fimMes = obterFimDoMes(referencia.ano, referencia.mes);
+
+  const totalEntradas = somarLancamentosNoPeriodo(lancamentosEntradas, inicioMes, fimMes);
+  const totalSaidas = somarLancamentosNoPeriodo(lancamentosSaidas, inicioMes, fimMes);
+  const saldoAtual =
+    somarLancamentosAteData(lancamentosEntradas, fimMes) -
+    somarLancamentosAteData(lancamentosSaidas, fimMes);
 
   return {
     saldoAtual: saldoAtual,
     totalEntradas: totalEntradas,
     totalSaidas: totalSaidas,
   };
-}
-
-/**
- * Soma todos os valores numéricos da coluna C a partir da linha 5 de uma aba.
- *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet Aba alvo.
- * @return {number} Soma dos valores encontrados.
- */
-function somarValoresColuna(sheet) {
-  if (!sheet) {
-    return 0;
-  }
-
-  const primeiraLinhaDados = 5;
-  const ultimaLinha = sheet.getLastRow();
-
-  if (ultimaLinha < primeiraLinhaDados) {
-    return 0;
-  }
-
-  const numeroLinhas = ultimaLinha - primeiraLinhaDados + 1;
-  const valores = sheet.getRange(primeiraLinhaDados, 3, numeroLinhas, 1).getValues();
-
-  return valores.reduce(function (acumulador, linha) {
-    const valor = Number(linha[0]);
-    return isNaN(valor) ? acumulador : acumulador + valor;
-  }, 0);
 }
 
 /**
@@ -88,8 +107,8 @@ function somarValoresColuna(sheet) {
 function getLancamentosRecentes(limit) {
   const maxRegistros = limit || 20;
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheetEntradas = spreadsheet.getSheetByName(NOME_ABA_ENTRADAS);
-  const sheetSaidas = spreadsheet.getSheetByName(NOME_ABA_SAIDAS);
+  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
+  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
 
   const lancamentos = [];
   lancamentos.push.apply(lancamentos, lerLancamentosDaAba(sheetEntradas, 'Entrada'));
@@ -100,6 +119,44 @@ function getLancamentosRecentes(limit) {
   });
 
   return lancamentos.slice(0, maxRegistros);
+}
+
+/**
+ * Retorna a lista de meses disponíveis entre entradas e saídas.
+ *
+ * @return {Array<{valor: string, rotulo: string}>}
+ */
+function getMesesDisponiveis() {
+  const spreadsheet = SpreadsheetApp.getActive();
+  const sheetEntradas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
+  const sheetSaidas = obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
+
+  const meses = {};
+
+  lerLancamentosDaAba(sheetEntradas, 'Entrada').forEach(function (item) {
+    registrarMes(item, meses);
+  });
+  lerLancamentosDaAba(sheetSaidas, 'Saída').forEach(function (item) {
+    registrarMes(item, meses);
+  });
+
+  if (Object.keys(meses).length === 0) {
+    const hoje = new Date();
+    const chave = criarChaveMes(hoje.getFullYear(), hoje.getMonth());
+    meses[chave] = { ano: hoje.getFullYear(), mes: hoje.getMonth() };
+  }
+
+  return Object.keys(meses)
+    .map(function (chave) {
+      const info = meses[chave];
+      return {
+        valor: chave,
+        rotulo: formatarRotuloMes(info.ano, info.mes),
+      };
+    })
+    .sort(function (a, b) {
+      return a.valor < b.valor ? 1 : -1;
+    });
 }
 
 /**
@@ -193,12 +250,99 @@ function addLancamento(lancamento) {
  */
 function obterAbaPorTipo(tipo, spreadsheet) {
   if (tipo === 'Entrada') {
-    return spreadsheet.getSheetByName(NOME_ABA_ENTRADAS);
+    return obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_ENTRADAS);
   }
   if (tipo === 'Saída') {
-    return spreadsheet.getSheetByName(NOME_ABA_SAIDAS);
+    return obterAbaPorNomes(spreadsheet, NOMES_POSSIVEIS_SAIDAS);
   }
   return null;
+}
+
+/**
+ * Retorna o mês de referência informado ou o mês atual caso inválido.
+ *
+ * @param {string} mesReferencia Mês no formato yyyy-MM.
+ * @return {{ano: number, mes: number}}
+ */
+function obterReferenciaMes(mesReferencia) {
+  if (typeof mesReferencia === 'string') {
+    const partes = mesReferencia.split('-');
+    if (partes.length === 2) {
+      const ano = Number(partes[0]);
+      const mes = Number(partes[1]) - 1;
+      if (!isNaN(ano) && !isNaN(mes) && mes >= 0 && mes < 12) {
+        return { ano: ano, mes: mes };
+      }
+    }
+  }
+
+  const hoje = new Date();
+  return {
+    ano: hoje.getFullYear(),
+    mes: hoje.getMonth(),
+  };
+}
+
+/**
+ * Obtém o último instante do mês informado.
+ *
+ * @param {number} ano Ano de referência.
+ * @param {number} mes Índice do mês (0-11).
+ * @return {Date}
+ */
+function obterFimDoMes(ano, mes) {
+  return new Date(ano, mes + 1, 0, 23, 59, 59, 999);
+}
+
+/**
+ * Soma os valores de lançamentos dentro de um intervalo.
+ *
+ * @param {Array<{data: Date, valor: number}>} lancamentos Lista de lançamentos.
+ * @param {Date} inicio Data inicial inclusiva.
+ * @param {Date} fim Data final inclusiva.
+ * @return {number}
+ */
+function somarLancamentosNoPeriodo(lancamentos, inicio, fim) {
+  if (!Array.isArray(lancamentos) || !inicio || !fim) {
+    return 0;
+  }
+
+  return lancamentos.reduce(function (total, item) {
+    const data = item && item.data instanceof Date ? item.data : null;
+    if (!data || isNaN(data)) {
+      return total;
+    }
+    if (data >= inicio && data <= fim) {
+      const valor = Number(item.valor);
+      return total + (isNaN(valor) ? 0 : valor);
+    }
+    return total;
+  }, 0);
+}
+
+/**
+ * Soma os valores de lançamentos até uma data limite.
+ *
+ * @param {Array<{data: Date, valor: number}>} lancamentos Lista de lançamentos.
+ * @param {Date} limite Data limite inclusiva.
+ * @return {number}
+ */
+function somarLancamentosAteData(lancamentos, limite) {
+  if (!Array.isArray(lancamentos) || !limite) {
+    return 0;
+  }
+
+  return lancamentos.reduce(function (total, item) {
+    const data = item && item.data instanceof Date ? item.data : null;
+    if (!data || isNaN(data)) {
+      return total;
+    }
+    if (data <= limite) {
+      const valor = Number(item.valor);
+      return total + (isNaN(valor) ? 0 : valor);
+    }
+    return total;
+  }, 0);
 }
 
 /**
@@ -216,4 +360,49 @@ function converterStringParaData(dataISO) {
   const mes = partes[1] - 1;
   const dia = partes[2];
   return new Date(ano, mes, dia);
+}
+
+/**
+ * Registra um mês no conjunto informado.
+ *
+ * @param {{data: Date}} item Lançamento contendo a data.
+ * @param {Object<string, {ano: number, mes: number}>} meses Mapa de meses já registrados.
+ */
+function registrarMes(item, meses) {
+  const data = item && item.data instanceof Date ? item.data : null;
+  if (!data || isNaN(data)) {
+    return;
+  }
+
+  const chave = criarChaveMes(data.getFullYear(), data.getMonth());
+  if (!meses[chave]) {
+    meses[chave] = {
+      ano: data.getFullYear(),
+      mes: data.getMonth(),
+    };
+  }
+}
+
+/**
+ * Cria uma chave no formato yyyy-MM para o mês informado.
+ *
+ * @param {number} ano Ano de referência.
+ * @param {number} mes Índice do mês (0-11).
+ * @return {string}
+ */
+function criarChaveMes(ano, mes) {
+  const mesFormatado = ('0' + (mes + 1)).slice(-2);
+  return ano + '-' + mesFormatado;
+}
+
+/**
+ * Formata um rótulo legível para o mês informado.
+ *
+ * @param {number} ano Ano de referência.
+ * @param {number} mes Índice do mês (0-11).
+ * @return {string}
+ */
+function formatarRotuloMes(ano, mes) {
+  const nomeMes = NOMES_MESES[mes] || '';
+  return nomeMes ? nomeMes + ' de ' + ano : ano + '-' + ('0' + (mes + 1)).slice(-2);
 }
