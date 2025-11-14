@@ -386,9 +386,17 @@ function getLancamentosRecentes(requisicao) {
   const contexto = prepararContexto(requisicao, false);
   const parametros = contexto.parametros || {};
 
-  const maxRegistros = Number(parametros.limite || parametros.limit || 200);
+  const maxRegistrosInformado = Number(parametros.limite || parametros.limit);
+  const maxRegistros = isFinite(maxRegistrosInformado) && maxRegistrosInformado > 0
+    ? Math.floor(maxRegistrosInformado)
+    : 200;
 
   const intervalo = determinarIntervaloLancamentos(parametros);
+  const filtroPersonalizado = Boolean(
+    (typeof parametros.dataInicio === 'string' && parametros.dataInicio) ||
+      (typeof parametros.dataFim === 'string' && parametros.dataFim) ||
+      (typeof parametros.mesReferencia === 'string' && parametros.mesReferencia)
+  );
 
   const spreadsheet = SpreadsheetApp.getActive();
   const sheetEntradas = obterAbaPorNomesOuCriar(
@@ -422,11 +430,11 @@ function getLancamentosRecentes(requisicao) {
     return true;
   });
 
-  if (!isNaN(maxRegistros) && maxRegistros > 0) {
-    return filtrados.slice(0, maxRegistros);
+  if (filtrados.length === 0 && !filtroPersonalizado) {
+    return lancamentos.slice(0, maxRegistros);
   }
 
-  return filtrados;
+  return filtrados.slice(0, maxRegistros);
 }
 
 /**
