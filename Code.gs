@@ -588,7 +588,11 @@ function lerLancamentosDaAba(sheet, tipo) {
       return acumulador;
     }
 
-    const dataObj = dataCelula instanceof Date ? dataCelula : new Date(dataCelula);
+    const dataObj = converterValorParaDataPlanilha(dataCelula);
+
+    if (!(dataObj instanceof Date) || isNaN(dataObj)) {
+      return acumulador;
+    }
 
     acumulador.push({
       tipo: tipo,
@@ -838,6 +842,58 @@ function converterStringParaData(dataISO) {
   const mes = partes[1] - 1;
   const dia = partes[2];
   return new Date(ano, mes, dia);
+}
+
+/**
+ * Converte um valor retornado pela planilha para um objeto Date válido.
+ * Aceita objetos Date, strings no formato brasileiro (dd/MM/yyyy) ou ISO, e números serializados.
+ *
+ * @param {Date|string|number} valor Valor da célula que representa uma data.
+ * @return {Date|null}
+ */
+function converterValorParaDataPlanilha(valor) {
+  if (valor instanceof Date && !isNaN(valor)) {
+    return valor;
+  }
+
+  if (typeof valor === 'string') {
+    const texto = valor.trim();
+    if (!texto) {
+      return null;
+    }
+
+    const padraoBR = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/;
+    const correspondenciaBR = texto.match(padraoBR);
+
+    if (correspondenciaBR) {
+      let ano = Number(correspondenciaBR[3]);
+      const mes = Number(correspondenciaBR[2]) - 1;
+      const dia = Number(correspondenciaBR[1]);
+
+      if (ano < 100) {
+        ano += ano >= 70 ? 1900 : 2000;
+      }
+
+      const dataBR = new Date(ano, mes, dia);
+      if (!isNaN(dataBR)) {
+        return dataBR;
+      }
+    }
+
+    const dataGenerica = new Date(texto);
+    if (!isNaN(dataGenerica)) {
+      return dataGenerica;
+    }
+  }
+
+  if (typeof valor === 'number' && !isNaN(valor)) {
+    const epocaExcel = new Date(Math.round((valor - 25569) * 86400 * 1000));
+    if (!isNaN(epocaExcel)) {
+      return epocaExcel;
+    }
+  }
+
+  return null;
 }
 
 /**
