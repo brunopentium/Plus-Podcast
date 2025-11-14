@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plus Podcast - Finanças</title>
+    <style>
+      :root {
+        --cor-saldo: #1e88e5;
+        --cor-entradas: #43a047;
+        --cor-saidas: #e53935;
+        --cor-fundo: #f5f5f5;
+        --cor-texto: #263238;
+        --cor-card: #ffffff;
+        --cor-borda: #e0e0e0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: var(--cor-fundo);
+        color: var(--cor-texto);
+      }
+
+      header {
+        background: linear-gradient(135deg, #0d47a1, #1976d2);
+        color: #ffffff;
+        padding: 1.5rem 2rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+        letter-spacing: 0.5px;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 2rem auto;
+        padding: 0 1.5rem 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .cards-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .card {
+        background-color: var(--cor-card);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+      }
+
+      .card .valor {
+        font-size: 1.8rem;
+        font-weight: 700;
+      }
+
+      .card.saldo {
+        border-left: 6px solid var(--cor-saldo);
+      }
+
+      .card.entrada {
+        border-left: 6px solid var(--cor-entradas);
+      }
+
+      .card.saida {
+        border-left: 6px solid var(--cor-saidas);
+      }
+
+      section {
+        background-color: var(--cor-card);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      }
+
+      section h2 {
+        margin-top: 0;
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+      }
+
+      form {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .form-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 180px;
+        min-width: 180px;
+      }
+
+      label {
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+      }
+
+      input[type='text'],
+      input[type='date'],
+      input[type='number'],
+      select {
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--cor-borda);
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: var(--cor-saldo);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.2);
+      }
+
+      button {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 8px;
+        background-color: var(--cor-saldo);
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        align-self: flex-start;
+        transition: background 0.2s ease, transform 0.2s ease;
+      }
+
+      button:hover:not(:disabled) {
+        background-color: #1565c0;
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      .status-area {
+        min-height: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.95rem;
+      }
+
+      .status-area span {
+        display: none;
+      }
+
+      .status-area .ativo {
+        display: inline-block;
+      }
+
+      .status-sucesso {
+        color: var(--cor-entradas);
+      }
+
+      .status-erro {
+        color: var(--cor-saidas);
+      }
+
+      .status-info {
+        color: var(--cor-saldo);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+      }
+
+      thead {
+        background-color: var(--cor-fundo);
+      }
+
+      th,
+      td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--cor-borda);
+      }
+
+      tbody tr.entrada td.valor {
+        color: var(--cor-entradas);
+        font-weight: 600;
+      }
+
+      tbody tr.saida td.valor {
+        color: var(--cor-saidas);
+        font-weight: 600;
+      }
+
+      tbody tr:nth-child(even) {
+        background-color: rgba(0, 0, 0, 0.02);
+      }
+
+      @media (max-width: 600px) {
+        header h1 {
+          font-size: 1.4rem;
+        }
+
+        main {
+          padding: 0 1rem 2rem;
+        }
+
+        th,
+        td {
+          font-size: 0.9rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Plus Podcast - Finanças</h1>
+    </header>
+    <main>
+      <section aria-labelledby="resumo-titulo">
+        <h2 id="resumo-titulo">Resumo Financeiro</h2>
+        <div class="cards-container">
+          <div class="card saldo">
+            <h3>Saldo atual</h3>
+            <span id="saldoAtual" class="valor">R$ 0,00</span>
+          </div>
+          <div class="card entrada">
+            <h3>Total de Entradas</h3>
+            <span id="totalEntradas" class="valor">R$ 0,00</span>
+          </div>
+          <div class="card saida">
+            <h3>Total de Saídas</h3>
+            <span id="totalSaidas" class="valor">R$ 0,00</span>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="novo-titulo">
+        <h2 id="novo-titulo">Novo Lançamento</h2>
+        <form id="formLancamento">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="tipoLancamento">Tipo</label>
+              <select id="tipoLancamento" required>
+                <option value="Entrada" selected>Entrada</option>
+                <option value="Saída">Saída</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="dataLancamento">Data</label>
+              <input id="dataLancamento" type="date" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="descricaoLancamento">Descrição</label>
+              <input id="descricaoLancamento" type="text" placeholder="Descrição do lançamento" required />
+            </div>
+            <div class="form-group">
+              <label for="valorLancamento">Valor</label>
+              <input id="valorLancamento" type="number" step="0.01" min="0" placeholder="0,00" required />
+            </div>
+          </div>
+          <div class="status-area">
+            <span id="statusInfo" class="status-info"></span>
+            <span id="statusSucesso" class="status-sucesso"></span>
+            <span id="statusErro" class="status-erro"></span>
+          </div>
+          <button id="salvarLancamento" type="submit">Salvar lançamento</button>
+        </form>
+      </section>
+
+      <section aria-labelledby="recentes-titulo">
+        <h2 id="recentes-titulo">Lançamentos Recentes</h2>
+        <div class="tabela-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th class="valor">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="lancamentosBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // Formata valores monetários no padrão brasileiro.
+      const formatadorMoeda = new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      });
+
+      /**
+       * Inicializa a página ao terminar de carregar.
+       */
+      window.onload = function () {
+        definirDataPadrao();
+        carregarResumo();
+        carregarLancamentos();
+        configurarFormulario();
+      };
+
+      /**
+       * Define a data atual como valor padrão do campo de data.
+       */
+      function definirDataPadrao() {
+        const hoje = new Date();
+        const ano = hoje.getFullYear();
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        document.getElementById('dataLancamento').value = `${ano}-${mes}-${dia}`;
+      }
+
+      /**
+       * Solicita os dados de resumo financeiro ao servidor.
+       */
+      function carregarResumo() {
+        google.script.run
+          .withSuccessHandler(preencherResumo)
+          .withFailureHandler(function () {
+            mostrarMensagem('Não foi possível carregar o resumo financeiro.', 'erro');
+          })
+          .getDashboardData();
+      }
+
+      /**
+       * Atualiza os cards do resumo financeiro com os dados recebidos.
+       * @param {{saldoAtual: number, totalEntradas: number, totalSaidas: number}} dados
+       */
+      function preencherResumo(dados) {
+        document.getElementById('saldoAtual').textContent = formatadorMoeda.format(dados.saldoAtual || 0);
+        document.getElementById('totalEntradas').textContent = formatadorMoeda.format(dados.totalEntradas || 0);
+        document.getElementById('totalSaidas').textContent = formatadorMoeda.format(dados.totalSaidas || 0);
+      }
+
+      /**
+       * Solicita os lançamentos recentes ao servidor.
+       */
+      function carregarLancamentos() {
+        google.script.run
+          .withSuccessHandler(preencherLancamentos)
+          .withFailureHandler(function () {
+            mostrarMensagem('Não foi possível carregar os lançamentos recentes.', 'erro');
+          })
+          .getLancamentosRecentes(20);
+      }
+
+      /**
+       * Popula a tabela de lançamentos recentes com os dados recebidos.
+       * @param {Array<{tipo: string, data: string|Date, descricao: string, valor: number}>} lancamentos
+       */
+      function preencherLancamentos(lancamentos) {
+        const corpoTabela = document.getElementById('lancamentosBody');
+        corpoTabela.innerHTML = '';
+
+        if (!lancamentos || lancamentos.length === 0) {
+          const linhaVazia = document.createElement('tr');
+          const coluna = document.createElement('td');
+          coluna.colSpan = 4;
+          coluna.textContent = 'Nenhum lançamento encontrado.';
+          linhaVazia.appendChild(coluna);
+          corpoTabela.appendChild(linhaVazia);
+          return;
+        }
+
+        lancamentos.forEach(function (item) {
+          const linha = document.createElement('tr');
+          linha.classList.add(item.tipo === 'Entrada' ? 'entrada' : 'saida');
+
+          const colunaTipo = document.createElement('td');
+          colunaTipo.textContent = item.tipo;
+
+          const colunaData = document.createElement('td');
+          const dataObj = new Date(item.data);
+          colunaData.textContent = formatarDataBrasileira(dataObj);
+
+          const colunaDescricao = document.createElement('td');
+          colunaDescricao.textContent = item.descricao || '-';
+
+          const colunaValor = document.createElement('td');
+          colunaValor.classList.add('valor');
+          colunaValor.textContent = formatadorMoeda.format(item.valor || 0);
+
+          linha.appendChild(colunaTipo);
+          linha.appendChild(colunaData);
+          linha.appendChild(colunaDescricao);
+          linha.appendChild(colunaValor);
+
+          corpoTabela.appendChild(linha);
+        });
+      }
+
+      /**
+       * Formata uma data para o formato dd/MM/yyyy.
+       * @param {Date} data
+       * @return {string}
+       */
+      function formatarDataBrasileira(data) {
+        if (!(data instanceof Date) || isNaN(data)) {
+          return '-';
+        }
+        const dia = String(data.getDate()).padStart(2, '0');
+        const mes = String(data.getMonth() + 1).padStart(2, '0');
+        const ano = data.getFullYear();
+        return `${dia}/${mes}/${ano}`;
+      }
+
+      /**
+       * Configura o comportamento do formulário de novo lançamento.
+       */
+      function configurarFormulario() {
+        const formulario = document.getElementById('formLancamento');
+        formulario.addEventListener('submit', function (evento) {
+          evento.preventDefault();
+          enviarLancamento();
+        });
+      }
+
+      /**
+       * Lê os dados do formulário e envia um novo lançamento para o servidor.
+       */
+      function enviarLancamento() {
+        limparMensagens();
+
+        const tipo = document.getElementById('tipoLancamento').value;
+        const data = document.getElementById('dataLancamento').value;
+        const descricao = document.getElementById('descricaoLancamento').value.trim();
+        const valor = Number(document.getElementById('valorLancamento').value);
+
+        if (!descricao) {
+          mostrarMensagem('Informe uma descrição para o lançamento.', 'erro');
+          return;
+        }
+
+        if (!valor || valor <= 0) {
+          mostrarMensagem('Informe um valor maior que zero.', 'erro');
+          return;
+        }
+
+        const botao = document.getElementById('salvarLancamento');
+        botao.disabled = true;
+        mostrarMensagem('Salvando lançamento...', 'info');
+
+        const novoLancamento = {
+          tipo: tipo,
+          data: data,
+          descricao: descricao,
+          valor: valor,
+        };
+
+        google.script.run
+          .withSuccessHandler(function (resposta) {
+            botao.disabled = false;
+            if (resposta && resposta.success) {
+              mostrarMensagem(resposta.message || 'Lançamento adicionado com sucesso.', 'sucesso');
+              document.getElementById('descricaoLancamento').value = '';
+              document.getElementById('valorLancamento').value = '';
+              carregarResumo();
+              carregarLancamentos();
+            } else {
+              mostrarMensagem(
+                (resposta && resposta.message) || 'Não foi possível adicionar o lançamento.',
+                'erro'
+              );
+            }
+          })
+          .withFailureHandler(function () {
+            botao.disabled = false;
+            mostrarMensagem('Ocorreu um erro ao salvar o lançamento.', 'erro');
+          })
+          .addLancamento(novoLancamento);
+      }
+
+      /**
+       * Exibe mensagens de status para o usuário.
+       * @param {string} mensagem
+       * @param {'sucesso'|'erro'|'info'} tipo
+       */
+      function mostrarMensagem(mensagem, tipo) {
+        limparMensagens();
+
+        const mapaStatus = {
+          sucesso: 'statusSucesso',
+          erro: 'statusErro',
+          info: 'statusInfo',
+        };
+
+        const elementoId = mapaStatus[tipo];
+        if (!elementoId) {
+          return;
+        }
+
+        const elemento = document.getElementById(elementoId);
+        elemento.textContent = mensagem;
+        elemento.classList.add('ativo');
+      }
+
+      /**
+       * Limpa todas as mensagens de status.
+       */
+      function limparMensagens() {
+        ['statusSucesso', 'statusErro', 'statusInfo'].forEach(function (id) {
+          const elemento = document.getElementById(id);
+          elemento.textContent = '';
+          elemento.classList.remove('ativo');
+        });
+      }
+    </script>
+  </body>
+</html>
