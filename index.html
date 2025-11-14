@@ -393,6 +393,11 @@
         border-bottom: 1px solid var(--cor-borda);
       }
 
+      .ocultar-acoes th.acoes,
+      .ocultar-acoes td.acoes {
+        display: none;
+      }
+
       th.acoes,
       td.acoes {
         text-align: center;
@@ -643,7 +648,7 @@
           <button type="button" id="aplicarFiltroLancamentos">Aplicar</button>
         </div>
         <div class="tabela-container">
-          <table>
+          <table id="tabelaLancamentos">
             <thead>
               <tr>
                 <th>Tipo</th>
@@ -1250,10 +1255,16 @@
 
       function atualizarVisibilidadeAcoesLancamentos() {
         const cabecalho = document.getElementById('colunaAcoesLancamentos');
+        const tabela = document.getElementById('tabelaLancamentos');
         if (!cabecalho) {
           return;
         }
-        cabecalho.hidden = !usuarioPodeExcluirLancamentos();
+        const podeExcluir = usuarioPodeExcluirLancamentos();
+        cabecalho.hidden = !podeExcluir;
+        cabecalho.setAttribute('aria-hidden', podeExcluir ? 'false' : 'true');
+        if (tabela) {
+          tabela.classList.toggle('ocultar-acoes', !podeExcluir);
+        }
       }
 
       function solicitarExclusaoLancamento(item) {
