@@ -39,6 +39,8 @@ const USUARIOS_CONFIG = {
 
 const PREFIXO_SESSAO = 'sessao.';
 
+let CACHE_FUSO_HORARIO_PLANILHA = null;
+
 /**
  * Função executada ao acessar o web app.
  * Carrega o template HTML principal e configura metadados da página.
@@ -889,11 +891,34 @@ function converterValorParaDataPlanilha(valor) {
   if (typeof valor === 'number' && !isNaN(valor)) {
     const epocaExcel = new Date(Math.round((valor - 25569) * 86400 * 1000));
     if (!isNaN(epocaExcel)) {
-      return epocaExcel;
+      const fusoHorario = obterFusoHorarioPlanilha();
+      if (fusoHorario) {
+        const dataNormalizada = Utilities.formatDate(epocaExcel, fusoHorario, 'yyyy-MM-dd');
+        return converterStringParaData(dataNormalizada);
+      }
+      return new Date(epocaExcel.getUTCFullYear(), epocaExcel.getUTCMonth(), epocaExcel.getUTCDate());
     }
   }
 
   return null;
+}
+
+/**
+ * Recupera e memoriza o fuso horário configurado na planilha.
+ *
+ * @return {string}
+ */
+function obterFusoHorarioPlanilha() {
+  if (CACHE_FUSO_HORARIO_PLANILHA === null) {
+    try {
+      const planilhaAtiva = SpreadsheetApp.getActive();
+      CACHE_FUSO_HORARIO_PLANILHA =
+        (planilhaAtiva && planilhaAtiva.getSpreadsheetTimeZone()) || Session.getScriptTimeZone() || 'GMT';
+    } catch (erro) {
+      CACHE_FUSO_HORARIO_PLANILHA = Session.getScriptTimeZone() || 'GMT';
+    }
+  }
+  return CACHE_FUSO_HORARIO_PLANILHA;
 }
 
 /**
