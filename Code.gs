@@ -591,7 +591,14 @@ function lerLancamentosDaAba(sheet, tipo) {
   }
 
   const registros = [];
-  const indiceInicial = ehCabecalhoLancamentos(dados[0]) ? 1 : 0;
+
+  let indiceInicial = 0;
+  for (let i = 0; i < dados.length; i++) {
+    if (ehCabecalhoLancamentos(dados[i])) {
+      indiceInicial = i + 1;
+      break;
+    }
+  }
 
   for (let i = indiceInicial; i < dados.length; i++) {
     const linhaAtual = dados[i];
