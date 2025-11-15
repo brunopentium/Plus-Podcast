@@ -585,7 +585,9 @@ function lerLancamentosDaAba(sheet, tipo) {
     return [];
   }
 
-  const dados = sheet.getRange(1, 1, ultimaLinha, 3).getValues();
+  const ultimaColuna = sheet.getLastColumn();
+  const numeroColunas = Math.max(3, ultimaColuna);
+  const dados = sheet.getRange(1, 1, ultimaLinha, numeroColunas).getValues();
   if (!dados || dados.length === 0) {
     return [];
   }
@@ -593,18 +595,25 @@ function lerLancamentosDaAba(sheet, tipo) {
   const registros = [];
 
   let indiceInicial = 0;
+  let mapeamentoColunas = { tipo: null, data: 0, descricao: 1, valor: 2 };
   for (let i = 0; i < dados.length; i++) {
-    if (ehCabecalhoLancamentos(dados[i])) {
+    const infoCabecalho = obterMapeamentoColunasLancamentos(dados[i]);
+    if (infoCabecalho) {
       indiceInicial = i + 1;
+      mapeamentoColunas = infoCabecalho;
       break;
     }
   }
 
   for (let i = indiceInicial; i < dados.length; i++) {
     const linhaAtual = dados[i];
-    const dataCelula = linhaAtual[0];
-    const descricaoCelula = linhaAtual[1];
-    const valorCelula = linhaAtual[2];
+    const dataCelula = obterValorDaLinha(linhaAtual, mapeamentoColunas.data, linhaAtual[0]);
+    const descricaoCelula = obterValorDaLinha(
+      linhaAtual,
+      mapeamentoColunas.descricao,
+      linhaAtual[1]
+    );
+    const valorCelula = obterValorDaLinha(linhaAtual, mapeamentoColunas.valor, linhaAtual[2]);
 
     if (!possuiConteudoLancamento(dataCelula, descricaoCelula, valorCelula)) {
       continue;
@@ -615,8 +624,11 @@ function lerLancamentosDaAba(sheet, tipo) {
       continue;
     }
 
+    const tipoCelula = obterValorDaLinha(linhaAtual, mapeamentoColunas.tipo, null);
+    const tipoNormalizado = limparTextoCelula(tipoCelula);
+
     registros.push({
-      tipo: tipo,
+      tipo: tipoNormalizado || tipo,
       data: dataObj,
       descricao: limparTextoCelula(descricaoCelula),
       valor: normalizarValorMonetario(valorCelula),
@@ -647,23 +659,69 @@ function possuiConteudoLancamento(dataCelula, descricaoCelula, valorCelula) {
 }
 
 function ehCabecalhoLancamentos(linha) {
+  return Boolean(obterMapeamentoColunasLancamentos(linha));
+}
+
+function obterMapeamentoColunasLancamentos(linha) {
   if (!linha || linha.length < 3) {
-    return false;
+    return null;
   }
 
-  const primeiraColuna = normalizarTextoParaComparacao(linha[0]);
-  const segundaColuna = normalizarTextoParaComparacao(linha[1]);
-  const terceiraColuna = normalizarTextoParaComparacao(linha[2]);
+  let indiceTipo = -1;
+  let indiceData = -1;
+  let indiceDescricao = -1;
+  let indiceValor = -1;
 
-  if (!primeiraColuna || !segundaColuna || !terceiraColuna) {
-    return false;
+  for (let i = 0; i < linha.length; i++) {
+    const valorNormalizado = normalizarTextoParaComparacao(linha[i]);
+    if (!valorNormalizado) {
+      continue;
+    }
+
+    if (indiceTipo === -1 && valorNormalizado.indexOf('tipo') !== -1) {
+      indiceTipo = i;
+      continue;
+    }
+
+    if (indiceData === -1 && valorNormalizado.indexOf('data') !== -1) {
+      indiceData = i;
+      continue;
+    }
+
+    if (
+      indiceDescricao === -1 &&
+      (valorNormalizado.indexOf('descricao') !== -1 || valorNormalizado.indexOf('descri') !== -1)
+    ) {
+      indiceDescricao = i;
+      continue;
+    }
+
+    if (indiceValor === -1 && valorNormalizado.indexOf('valor') !== -1) {
+      indiceValor = i;
+      continue;
+    }
   }
 
-  return (
-    primeiraColuna.indexOf('data') !== -1 &&
-    (segundaColuna.indexOf('descricao') !== -1 || segundaColuna.indexOf('descri') !== -1) &&
-    terceiraColuna.indexOf('valor') !== -1
-  );
+  if (indiceData === -1 || indiceDescricao === -1 || indiceValor === -1) {
+    return null;
+  }
+
+  return {
+    tipo: indiceTipo !== -1 ? indiceTipo : null,
+    data: indiceData,
+    descricao: indiceDescricao,
+    valor: indiceValor,
+  };
+}
+
+function obterValorDaLinha(linha, indice, padrao) {
+  if (!linha) {
+    return padrao;
+  }
+  if (typeof indice === 'number' && indice >= 0 && indice < linha.length) {
+    return linha[indice];
+  }
+  return padrao;
 }
 
 function normalizarTextoParaComparacao(valor) {
