@@ -420,11 +420,22 @@ function getLancamentosRecentes(requisicao) {
     return true;
   });
 
+  // Caso o filtro padrão (últimos 30 dias) não encontre resultados,
+  // exibimos os lançamentos mais recentes disponíveis para evitar uma tabela vazia.
+  const possuiFiltroPersonalizado = Boolean(
+    (parametros && parametros.dataInicio) ||
+      (parametros && parametros.dataFim) ||
+      (parametros && parametros.mesReferencia)
+  );
+
+  const resultado =
+    filtrados.length > 0 || possuiFiltroPersonalizado ? filtrados : lancamentos;
+
   if (!isNaN(maxRegistros) && maxRegistros > 0) {
-    return filtrados.slice(0, maxRegistros);
+    return resultado.slice(0, maxRegistros);
   }
 
-  return filtrados;
+  return resultado;
 }
 
 /**
