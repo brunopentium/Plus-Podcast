@@ -663,6 +663,27 @@ function ehCabecalhoLancamentos(linha) {
 }
 
 function obterMapeamentoColunasLancamentos(linha) {
+  if (!linha || linha.length === 0) {
+    return null;
+  }
+
+  const estrategias = [
+    mapearCabecalhoPorCorrespondenciaDireta,
+    mapearCabecalhoPorSinonimos,
+    mapearCabecalhoPorPosicaoPadrao,
+  ];
+
+  for (let i = 0; i < estrategias.length; i++) {
+    const resultado = estrategias[i](linha);
+    if (resultado) {
+      return resultado;
+    }
+  }
+
+  return null;
+}
+
+function mapearCabecalhoPorCorrespondenciaDireta(linha) {
   if (!linha || linha.length < 3) {
     return null;
   }
@@ -712,6 +733,109 @@ function obterMapeamentoColunasLancamentos(linha) {
     descricao: indiceDescricao,
     valor: indiceValor,
   };
+}
+
+function mapearCabecalhoPorSinonimos(linha) {
+  if (!linha || linha.length < 3) {
+    return null;
+  }
+
+  const sinonimos = {
+    tipo: ['tipo', 'classe', 'categoria', 'classificacao'],
+    data: ['data', 'dt', 'dia', 'lancamento'],
+    descricao: ['descricao', 'descri', 'detalhe', 'historico', 'nome'],
+    valor: ['valor', 'vl', 'quantia', 'total', 'montante'],
+  };
+
+  const resultado = { tipo: null, data: null, descricao: null, valor: null };
+
+  for (let i = 0; i < linha.length; i++) {
+    const texto = normalizarTextoParaComparacao(linha[i]);
+    if (!texto) {
+      continue;
+    }
+
+    if (resultado.tipo === null && contemAlgumTermo(texto, sinonimos.tipo)) {
+      resultado.tipo = i;
+      continue;
+    }
+
+    if (resultado.data === null && contemAlgumTermo(texto, sinonimos.data)) {
+      resultado.data = i;
+      continue;
+    }
+
+    if (resultado.descricao === null && contemAlgumTermo(texto, sinonimos.descricao)) {
+      resultado.descricao = i;
+      continue;
+    }
+
+    if (resultado.valor === null && contemAlgumTermo(texto, sinonimos.valor)) {
+      resultado.valor = i;
+      continue;
+    }
+  }
+
+  if (resultado.data === null || resultado.descricao === null || resultado.valor === null) {
+    return null;
+  }
+
+  return resultado;
+}
+
+function mapearCabecalhoPorPosicaoPadrao(linha) {
+  if (!linha || linha.length < 3) {
+    return null;
+  }
+
+  const indicesPreenchidos = [];
+  for (let i = 0; i < linha.length; i++) {
+    const texto = normalizarTextoParaComparacao(linha[i]);
+    if (texto) {
+      indicesPreenchidos.push({ indice: i, texto: texto });
+    }
+  }
+
+  if (indicesPreenchidos.length < 3) {
+    return null;
+  }
+
+  let indiceTipo = null;
+  let indiceData = null;
+  let indiceDescricao = null;
+  let indiceValor = null;
+
+  if (indicesPreenchidos.length >= 4 && contemAlgumTermo(indicesPreenchidos[0].texto, ['tipo', 'classe'])) {
+    indiceTipo = indicesPreenchidos[0].indice;
+    indicesPreenchidos.shift();
+  }
+
+  indiceData = indicesPreenchidos[0] ? indicesPreenchidos[0].indice : null;
+  indiceDescricao = indicesPreenchidos[1] ? indicesPreenchidos[1].indice : null;
+  indiceValor = indicesPreenchidos[2] ? indicesPreenchidos[2].indice : null;
+
+  if (indiceData === null || indiceDescricao === null || indiceValor === null) {
+    return null;
+  }
+
+  return {
+    tipo: indiceTipo,
+    data: indiceData,
+    descricao: indiceDescricao,
+    valor: indiceValor,
+  };
+}
+
+function contemAlgumTermo(texto, termos) {
+  if (!texto || !Array.isArray(termos)) {
+    return false;
+  }
+  for (let i = 0; i < termos.length; i++) {
+    if (texto.indexOf(termos[i]) !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function obterValorDaLinha(linha, indice, padrao) {
