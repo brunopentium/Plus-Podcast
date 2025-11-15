@@ -597,19 +597,10 @@ function lerLancamentosDaAba(sheet, tipo) {
   let indiceInicial = 0;
   let mapeamentoColunas = { tipo: null, data: 0, descricao: 1, valor: 2 };
   for (let i = 0; i < dados.length; i++) {
-    const infoCabecalho = obterMapeamentoColunasLancamentos(dados[i], i);
+    const infoCabecalho = obterMapeamentoColunasLancamentos(dados[i]);
     if (infoCabecalho) {
-      if (infoCabecalho.colunas) {
-        mapeamentoColunas = infoCabecalho.colunas;
-        if (typeof infoCabecalho.inicioDadosIndex === 'number') {
-          indiceInicial = infoCabecalho.inicioDadosIndex;
-        } else {
-          indiceInicial = infoCabecalho.linhaEhCabecalho === false ? i : i + 1;
-        }
-      } else {
-        mapeamentoColunas = infoCabecalho;
-        indiceInicial = i + 1;
-      }
+      indiceInicial = i + 1;
+      mapeamentoColunas = infoCabecalho;
       break;
     }
   }
@@ -668,38 +659,10 @@ function possuiConteudoLancamento(dataCelula, descricaoCelula, valorCelula) {
 }
 
 function ehCabecalhoLancamentos(linha) {
-  const info = obterMapeamentoColunasLancamentos(linha);
-  if (!info) {
-    return false;
-  }
-  if (typeof info.linhaEhCabecalho === 'boolean') {
-    return info.linhaEhCabecalho;
-  }
-  return true;
+  return Boolean(obterMapeamentoColunasLancamentos(linha));
 }
 
-function obterMapeamentoColunasLancamentos(linha, indiceLinha) {
-  if (!linha || linha.length < 3) {
-    return null;
-  }
-
-  const tentativas = [
-    mapearColunasCabecalhoVersao1,
-    mapearColunasCabecalhoVersao2,
-    mapearColunasCabecalhoVersao3,
-  ];
-
-  for (let i = 0; i < tentativas.length; i++) {
-    const resultado = tentativas[i](linha, indiceLinha);
-    if (resultado) {
-      return resultado;
-    }
-  }
-
-  return null;
-}
-
-function mapearColunasCabecalhoVersao1(linha, indiceLinha) {
+function obterMapeamentoColunasLancamentos(linha) {
   if (!linha || linha.length < 3) {
     return null;
   }
@@ -743,234 +706,12 @@ function mapearColunasCabecalhoVersao1(linha, indiceLinha) {
     return null;
   }
 
-  return criarResultadoMapeamentoCabecalho(
-    { tipo: indiceTipo, data: indiceData, descricao: indiceDescricao, valor: indiceValor },
-    indiceLinha,
-    true
-  );
-}
-
-function mapearColunasCabecalhoVersao2(linha, indiceLinha) {
-  if (!linha || linha.length < 3) {
-    return null;
-  }
-
-  const padroesData = [
-    'data',
-    'competencia',
-    'lancamento',
-    'lancto',
-    'pagamento',
-    'recebimento',
-    'vencimento',
-    'emissao',
-    'dia',
-  ];
-  const padroesDescricao = [
-    'descricao',
-    'descri',
-    'historico',
-    'detalhe',
-    'observacao',
-    'referencia',
-    'identificacao',
-    'cliente',
-    'fornecedor',
-  ];
-  const padroesValor = [
-    'valor',
-    'total',
-    'quantia',
-    'montante',
-    'receita',
-    'despesa',
-    'entrada',
-    'saida',
-    'pagto',
-    'pago',
-  ];
-  const padroesTipo = ['tipo', 'categoria', 'classificacao', 'natureza', 'grupo'];
-
-  let indiceTipo = -1;
-  let indiceData = -1;
-  let indiceDescricao = -1;
-  let indiceValor = -1;
-
-  for (let i = 0; i < linha.length; i++) {
-    const valorNormalizado = normalizarTextoParaComparacao(linha[i]);
-    if (!valorNormalizado) {
-      continue;
-    }
-
-    if (indiceData === -1 && contemAlgumPadrao(valorNormalizado, padroesData)) {
-      indiceData = i;
-      continue;
-    }
-
-    if (indiceDescricao === -1 && contemAlgumPadrao(valorNormalizado, padroesDescricao)) {
-      indiceDescricao = i;
-      continue;
-    }
-
-    if (indiceValor === -1 && contemAlgumPadrao(valorNormalizado, padroesValor)) {
-      indiceValor = i;
-      continue;
-    }
-
-    if (indiceTipo === -1 && contemAlgumPadrao(valorNormalizado, padroesTipo)) {
-      indiceTipo = i;
-      continue;
-    }
-  }
-
-  if (indiceData === -1 || indiceDescricao === -1 || indiceValor === -1) {
-    return null;
-  }
-
-  return criarResultadoMapeamentoCabecalho(
-    { tipo: indiceTipo, data: indiceData, descricao: indiceDescricao, valor: indiceValor },
-    indiceLinha,
-    true
-  );
-}
-
-function mapearColunasCabecalhoVersao3(linha, indiceLinha) {
-  if (!linha || linha.length < 3) {
-    return null;
-  }
-
-  const indiceData = detectarIndiceDataLinha(linha);
-  const indiceValor = detectarIndiceValorLinha(linha);
-
-  if (indiceData === -1 || indiceValor === -1) {
-    return null;
-  }
-
-  let indiceDescricao = -1;
-  for (let i = 0; i < linha.length; i++) {
-    if (i === indiceData || i === indiceValor) {
-      continue;
-    }
-    const valor = linha[i];
-    if (typeof valor === 'string') {
-      if (valor.trim()) {
-        indiceDescricao = i;
-        break;
-      }
-    } else if (valor !== null && typeof valor !== 'undefined') {
-      indiceDescricao = i;
-      break;
-    }
-  }
-
-  if (indiceDescricao === -1) {
-    return null;
-  }
-
-  let indiceTipo = -1;
-  for (let i = 0; i < linha.length; i++) {
-    if (i === indiceData || i === indiceValor || i === indiceDescricao) {
-      continue;
-    }
-    const valor = linha[i];
-    if (typeof valor === 'string') {
-      const texto = valor.trim().toLowerCase();
-      if (texto === 'entrada' || texto === 'saída' || texto === 'saida' || texto === 'receita' || texto === 'despesa') {
-        indiceTipo = i;
-        break;
-      }
-    }
-  }
-
-  const linhaDados = typeof indiceLinha === 'number' ? indiceLinha : 0;
-
   return {
-    colunas: {
-      tipo: indiceTipo !== -1 ? indiceTipo : null,
-      data: indiceData,
-      descricao: indiceDescricao,
-      valor: indiceValor,
-    },
-    inicioDadosIndex: linhaDados,
-    linhaEhCabecalho: false,
+    tipo: indiceTipo !== -1 ? indiceTipo : null,
+    data: indiceData,
+    descricao: indiceDescricao,
+    valor: indiceValor,
   };
-}
-
-function criarResultadoMapeamentoCabecalho(indices, indiceLinha, linhaEhCabecalho) {
-  const resultado = {
-    colunas: {
-      tipo: typeof indices.tipo === 'number' && indices.tipo >= 0 ? indices.tipo : null,
-      data: indices.data,
-      descricao: indices.descricao,
-      valor: indices.valor,
-    },
-    linhaEhCabecalho: linhaEhCabecalho,
-  };
-
-  if (typeof indiceLinha === 'number') {
-    resultado.inicioDadosIndex = linhaEhCabecalho ? indiceLinha + 1 : indiceLinha;
-  }
-
-  return resultado;
-}
-
-function contemAlgumPadrao(texto, padroes) {
-  for (let i = 0; i < padroes.length; i++) {
-    if (texto.indexOf(padroes[i]) !== -1) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function detectarIndiceDataLinha(linha) {
-  for (let i = 0; i < linha.length; i++) {
-    const valor = linha[i];
-    if (valor instanceof Date && !isNaN(valor)) {
-      return i;
-    }
-    if (typeof valor === 'string') {
-      const data = converterValorParaDataPlanilha(valor);
-      if (data instanceof Date && !isNaN(data)) {
-        return i;
-      }
-    }
-    if (typeof valor === 'number' && !isNaN(valor)) {
-      const dataNumero = converterValorParaDataPlanilha(valor);
-      if (dataNumero instanceof Date && !isNaN(dataNumero)) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function detectarIndiceValorLinha(linha) {
-  for (let i = 0; i < linha.length; i++) {
-    const valor = linha[i];
-    if (typeof valor === 'number' && !isNaN(valor)) {
-      return i;
-    }
-    if (typeof valor === 'string') {
-      const texto = valor.trim();
-      if (!texto) {
-        continue;
-      }
-      const textoNormalizado = texto
-        .replace(/\s/g, '')
-        .replace(/R\$/gi, '')
-        .replace(/\./g, '')
-        .replace(',', '.');
-      if (!textoNormalizado) {
-        continue;
-      }
-      const numero = Number(textoNormalizado);
-      if (!isNaN(numero)) {
-        return i;
-      }
-    }
-  }
-  return -1;
 }
 
 function obterValorDaLinha(linha, indice, padrao) {
