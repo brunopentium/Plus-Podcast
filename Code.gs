@@ -267,6 +267,27 @@ function obterAbaPorNomes(spreadsheet, nomes) {
     }
   }
 
+  var nomesNormalizados = nomes
+    .map(function (nome) {
+      return normalizarNomeAbaComparacao(nome);
+    })
+    .filter(function (texto) {
+      return !!texto;
+    });
+
+  if (nomesNormalizados.length === 0) {
+    return null;
+  }
+
+  var abas = spreadsheet.getSheets();
+  for (var j = 0; j < abas.length; j++) {
+    var abaAtual = abas[j];
+    var nomeNormalizado = normalizarNomeAbaComparacao(abaAtual.getName());
+    if (nomesNormalizados.indexOf(nomeNormalizado) !== -1) {
+      return abaAtual;
+    }
+  }
+
   return null;
 }
 
@@ -667,6 +688,14 @@ function normalizarTextoParaComparacao(valor) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
+}
+
+function normalizarNomeAbaComparacao(nome) {
+  if (!nome) {
+    return '';
+  }
+
+  return normalizarTextoParaComparacao(nome).replace(/[\s_-]+/g, '');
 }
 
 function limparTextoCelula(valor) {
