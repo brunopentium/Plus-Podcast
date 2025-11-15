@@ -438,16 +438,6 @@
         border-bottom: 1px solid var(--cor-borda);
       }
 
-      .ocultar-acoes th.acoes,
-      .ocultar-acoes td.acoes {
-        display: none;
-      }
-
-      th.acoes,
-      td.acoes {
-        text-align: center;
-      }
-
       tbody tr.entrada td.valor {
         color: var(--cor-entradas);
         font-weight: 600;
@@ -473,25 +463,6 @@
 
       .formulario-bloqueado {
         opacity: 0.75;
-      }
-
-      .botao-acao {
-        padding: 0.45rem 0.9rem;
-        font-size: 0.85rem;
-        border-radius: 6px;
-        align-self: center;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .botao-acao.botao-excluir {
-        background-color: var(--cor-saidas);
-        border: 1px solid #c62828;
-      }
-
-      .botao-acao.botao-excluir:hover:not(:disabled) {
-        background-color: #c62828;
       }
 
       @media (min-width: 640px) {
@@ -736,7 +707,6 @@
                   <th>Data</th>
                   <th>Descrição</th>
                   <th class="valor">Valor</th>
-                  <th class="acoes" id="colunaAcoesLancamentos" hidden>Ações</th>
                 </tr>
               </thead>
               <tbody id="lancamentosBody"></tbody>
@@ -769,7 +739,6 @@
 
       const CHAVE_SESSAO = 'plusPodcastSessao';
       const PAPEL_SOMENTE_LEITURA = 'leitura';
-      const USUARIO_EXCLUSAO = 'bruno';
 
       let tipoLancamentoAtual = 'Entrada';
       let sessaoAtual = null;
@@ -1178,6 +1147,7 @@
         const filtro = obterParametrosFiltroLancamentos();
         if (filtro.erro) {
           mostrarMensagem(filtro.erro, 'erro');
+          exibirMensagemLancamentos(filtro.erro);
           return;
         }
 
@@ -1185,10 +1155,11 @@
 
         const requisicao = criarRequisicao(parametros);
         if (!requisicao) {
+          exibirMensagemLancamentos('Faça login para visualizar os lançamentos.');
           return;
         }
 
-        atualizarVisibilidadeAcoesLancamentos();
+        exibirMensagemLancamentos('Carregando lançamentos...');
 
         google.script.run
           .withSuccessHandler(preencherLancamentos)
@@ -1196,9 +1167,10 @@
             if (tratarErroDeSessao(erro)) {
               return;
             }
-            console.error('Não foi possível carregar os lançamentos recentes.', erro);
+            console.error('Não foi possível carregar os lançamentos.', erro);
+            exibirMensagemLancamentos('Não foi possível carregar os lançamentos.');
           })
-          .getLancamentosRecentes(requisicao);
+          .listarLancamentos(requisicao);
       }
 
       function configurarSelecaoMes() {
@@ -1386,82 +1358,20 @@
         return { parametros: {} };
       }
 
-      function usuarioPodeExcluirLancamentos() {
-        return !!(sessaoAtual && sessaoAtual.id === USUARIO_EXCLUSAO);
-      }
-
-      function atualizarVisibilidadeAcoesLancamentos() {
-        const cabecalho = document.getElementById('colunaAcoesLancamentos');
-        const tabela = document.getElementById('tabelaLancamentos');
-        if (!cabecalho) {
-          return;
-        }
-        const podeExcluir = usuarioPodeExcluirLancamentos();
-        cabecalho.hidden = !podeExcluir;
-        cabecalho.setAttribute('aria-hidden', podeExcluir ? 'false' : 'true');
-        if (tabela) {
-          tabela.classList.toggle('ocultar-acoes', !podeExcluir);
-        }
-      }
-
-      function solicitarExclusaoLancamento(item) {
-        if (!usuarioPodeExcluirLancamentos()) {
+      function exibirMensagemLancamentos(mensagem) {
+        const corpoTabela = document.getElementById('lancamentosBody');
+        if (!corpoTabela) {
           return;
         }
 
-        if (!item || !item.tipo || typeof item.linha === 'undefined') {
-          return;
-        }
+        corpoTabela.innerHTML = '';
 
-        const descricao = item.descricao || '-';
-        const dataTexto = formatarDataBrasileira(new Date(item.data));
-        const mensagemConfirmacao =
-          'Tem certeza que deseja excluir o lançamento "' +
-          descricao +
-          '" de ' +
-          dataTexto +
-          '?';
-
-        if (!confirm(mensagemConfirmacao)) {
-          return;
-        }
-
-        mostrarMensagem('Excluindo lançamento...', 'info');
-        excluirLancamentos([
-          {
-            tipo: item.tipo,
-            linha: item.linha,
-          },
-        ]);
-      }
-
-      function excluirLancamentos(lancamentos) {
-        const requisicao = criarRequisicao({ lancamentos: lancamentos });
-        if (!requisicao) {
-          mostrarMensagem('Sessão expirada. Faça login novamente.', 'erro');
-          return;
-        }
-
-        google.script.run
-          .withSuccessHandler(function (resposta) {
-            if (resposta && resposta.success) {
-              mostrarMensagem(resposta.message || 'Lançamento excluído com sucesso.', 'sucesso');
-              carregarLancamentos();
-              carregarMesesDisponiveis();
-            } else {
-              mostrarMensagem(
-                (resposta && resposta.message) || 'Não foi possível excluir o lançamento.',
-                'erro'
-              );
-            }
-          })
-          .withFailureHandler(function (erro) {
-            if (tratarErroDeSessao(erro)) {
-              return;
-            }
-            mostrarMensagem('Não foi possível excluir o lançamento.', 'erro');
-          })
-          .deleteLancamentos(requisicao);
+        const linha = document.createElement('tr');
+        const coluna = document.createElement('td');
+        coluna.colSpan = 4;
+        coluna.textContent = mensagem;
+        linha.appendChild(coluna);
+        corpoTabela.appendChild(linha);
       }
 
       function preencherLancamentos(lancamentos) {
@@ -1472,18 +1382,10 @@
 
         corpoTabela.innerHTML = '';
 
-        const permitirExcluir = usuarioPodeExcluirLancamentos();
-        atualizarVisibilidadeAcoesLancamentos();
-
         const itens = Array.isArray(lancamentos) ? lancamentos.slice() : [];
 
         if (itens.length === 0) {
-          const linhaVazia = document.createElement('tr');
-          const coluna = document.createElement('td');
-          coluna.colSpan = permitirExcluir ? 5 : 4;
-          coluna.textContent = 'Nenhum lançamento encontrado.';
-          linhaVazia.appendChild(coluna);
-          corpoTabela.appendChild(linhaVazia);
+          exibirMensagemLancamentos('Nenhum lançamento encontrado.');
           return;
         }
 
@@ -1511,22 +1413,6 @@
           linha.appendChild(colunaData);
           linha.appendChild(colunaDescricao);
           linha.appendChild(colunaValor);
-
-          if (permitirExcluir) {
-            const colunaAcoes = document.createElement('td');
-            colunaAcoes.classList.add('acoes');
-
-            const botaoExcluir = document.createElement('button');
-            botaoExcluir.type = 'button';
-            botaoExcluir.textContent = 'Excluir';
-            botaoExcluir.className = 'botao-acao botao-excluir';
-            botaoExcluir.addEventListener('click', function () {
-              solicitarExclusaoLancamento(item);
-            });
-
-            colunaAcoes.appendChild(botaoExcluir);
-            linha.appendChild(colunaAcoes);
-          }
 
           corpoTabela.appendChild(linha);
         });
@@ -1779,8 +1665,6 @@
         if (aviso) {
           aviso.hidden = !somenteLeitura;
         }
-
-        atualizarVisibilidadeAcoesLancamentos();
       }
 
       function mostrarMensagem(mensagem, tipo) {
