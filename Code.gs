@@ -663,357 +663,55 @@ function ehCabecalhoLancamentos(linha) {
 }
 
 function obterMapeamentoColunasLancamentos(linha) {
-  if (!Array.isArray(linha) || linha.length < 3) {
+  if (!linha || linha.length < 3) {
     return null;
   }
 
-  const estrategias = [
-    mapearCabecalhoVersao1,
-    mapearCabecalhoVersao2,
-    mapearCabecalhoVersao3,
-  ];
+  let indiceTipo = -1;
+  let indiceData = -1;
+  let indiceDescricao = -1;
+  let indiceValor = -1;
 
-  for (let i = 0; i < estrategias.length; i++) {
-    const resultado = estrategias[i](linha);
+  for (let i = 0; i < linha.length; i++) {
+    const valorNormalizado = normalizarTextoParaComparacao(linha[i]);
+    if (!valorNormalizado) {
+      continue;
+    }
+
+    if (indiceTipo === -1 && valorNormalizado.indexOf('tipo') !== -1) {
+      indiceTipo = i;
+      continue;
+    }
+
+    if (indiceData === -1 && valorNormalizado.indexOf('data') !== -1) {
+      indiceData = i;
+      continue;
+    }
+
     if (
-      resultado &&
-      indiceCabecalhoValido(resultado.data) &&
-      indiceCabecalhoValido(resultado.descricao) &&
-      indiceCabecalhoValido(resultado.valor)
+      indiceDescricao === -1 &&
+      (valorNormalizado.indexOf('descricao') !== -1 || valorNormalizado.indexOf('descri') !== -1)
     ) {
-      return {
-        tipo: indiceCabecalhoValido(resultado.tipo) ? resultado.tipo : null,
-        data: resultado.data,
-        descricao: resultado.descricao,
-        valor: resultado.valor,
-      };
+      indiceDescricao = i;
+      continue;
+    }
+
+    if (indiceValor === -1 && valorNormalizado.indexOf('valor') !== -1) {
+      indiceValor = i;
+      continue;
     }
   }
 
-  return null;
-}
-
-function mapearCabecalhoVersao1(linha) {
-  const sinonimos = {
-    tipo: criarSinonimosCabecalho(['tipo', 'categoria', 'classificacao', 'classe', 'natureza']),
-    data: criarSinonimosCabecalho([
-      'data',
-      'data do lancamento',
-      'data lancamento',
-      'data pagamento',
-      'data do pagamento',
-      'data emissao',
-      'data de emissao',
-      'dia',
-    ]),
-    descricao: criarSinonimosCabecalho([
-      'descricao',
-      'descricao do lancamento',
-      'historico',
-      'detalhes',
-      'detalhe',
-      'referencia',
-      'observacao',
-      'observacoes',
-    ]),
-    valor: criarSinonimosCabecalho([
-      'valor',
-      'valor total',
-      'valor bruto',
-      'valor liquido',
-      'valor r$',
-      'valor rs',
-      'montante',
-      'quantia',
-      'total',
-      'valor pago',
-      'amount',
-      'preco',
-      'preco final',
-    ]),
-  };
-
-  const indices = { tipo: null, data: null, descricao: null, valor: null };
-
-  for (let i = 0; i < linha.length; i++) {
-    const textoNormalizado = normalizarTextoParaComparacao(linha[i]);
-    if (!textoNormalizado) {
-      continue;
-    }
-
-    const chave = padronizarChaveComparacao(textoNormalizado);
-
-    if (indices.tipo === null && sinonimos.tipo.indexOf(chave) !== -1) {
-      indices.tipo = i;
-      continue;
-    }
-
-    if (indices.data === null && sinonimos.data.indexOf(chave) !== -1) {
-      indices.data = i;
-      continue;
-    }
-
-    if (indices.descricao === null && sinonimos.descricao.indexOf(chave) !== -1) {
-      indices.descricao = i;
-      continue;
-    }
-
-    if (indices.valor === null && sinonimos.valor.indexOf(chave) !== -1) {
-      indices.valor = i;
-    }
-  }
-
-  if (indices.data === null || indices.descricao === null || indices.valor === null) {
+  if (indiceData === -1 || indiceDescricao === -1 || indiceValor === -1) {
     return null;
   }
 
   return {
-    tipo: indices.tipo,
-    data: indices.data,
-    descricao: indices.descricao,
-    valor: indices.valor,
-  };
-}
-
-function mapearCabecalhoVersao2(linha) {
-  const tokens = {
-    tipo: ['tipo', 'categoria', 'classific', 'naturez', 'grupo'],
-    data: ['data', 'dt', 'competencia', 'pagamento', 'emissao', 'vencimento', 'vencto'],
-    descricao: ['descricao', 'descri', 'histor', 'detal', 'referenc', 'observac', 'memo'],
-    valor: ['valor', 'quantia', 'montante', 'total', 'bruto', 'liquido', 'amount', 'preco', 'custo'],
-  };
-
-  const indices = { tipo: null, data: null, descricao: null, valor: null };
-
-  for (let i = 0; i < linha.length; i++) {
-    const textoNormalizado = normalizarTextoParaComparacao(linha[i]);
-    if (!textoNormalizado) {
-      continue;
-    }
-
-    const chave = padronizarChaveComparacao(textoNormalizado);
-
-    if (indices.tipo === null && contemTokenCabecalho(chave, tokens.tipo)) {
-      indices.tipo = i;
-    }
-
-    if (indices.data === null && contemTokenCabecalho(chave, tokens.data)) {
-      indices.data = i;
-      continue;
-    }
-
-    if (indices.descricao === null && contemTokenCabecalho(chave, tokens.descricao)) {
-      indices.descricao = i;
-      continue;
-    }
-
-    if (indices.valor === null && contemTokenCabecalho(chave, tokens.valor)) {
-      indices.valor = i;
-    }
-  }
-
-  if (indices.data === null || indices.descricao === null || indices.valor === null) {
-    return null;
-  }
-
-  return {
-    tipo: indices.tipo,
-    data: indices.data,
-    descricao: indices.descricao,
-    valor: indices.valor,
-  };
-}
-
-function mapearCabecalhoVersao3(linha) {
-  const candidatos = [];
-
-  for (let i = 0; i < linha.length; i++) {
-    const textoNormalizado = normalizarTextoParaComparacao(linha[i]);
-    if (!textoNormalizado) {
-      continue;
-    }
-
-    candidatos.push({
-      indice: i,
-      chave: padronizarChaveComparacao(textoNormalizado),
-    });
-  }
-
-  if (candidatos.length === 0) {
-    return null;
-  }
-
-  const configuracao = {
-    data: {
-      fortes: criarSinonimosCabecalho([
-        'data',
-        'datadolancamento',
-        'datapagamento',
-        'dataemissao',
-        'datadeemissao',
-      ]),
-      medios: criarSinonimosCabecalho([
-        'competencia',
-        'vencimento',
-        'vencto',
-        'mesref',
-        'periodo',
-      ]),
-      fracos: criarSinonimosCabecalho(['dia', 'mes']),
-    },
-    descricao: {
-      fortes: criarSinonimosCabecalho([
-        'descricao',
-        'descricaodolancamento',
-        'historico',
-        'detalhes',
-      ]),
-      medios: criarSinonimosCabecalho([
-        'observacao',
-        'memo',
-        'comentario',
-        'referencia',
-      ]),
-      fracos: criarSinonimosCabecalho(['resumo', 'texto', 'informacao']),
-    },
-    valor: {
-      fortes: criarSinonimosCabecalho([
-        'valor',
-        'valortotal',
-        'valorbruto',
-        'valorliquido',
-        'valorpago',
-      ]),
-      medios: criarSinonimosCabecalho([
-        'quantia',
-        'montante',
-        'total',
-        'saldo',
-      ]),
-      fracos: criarSinonimosCabecalho(['amount', 'preco', 'custo', 'despesa']),
-    },
-    tipo: {
-      fortes: criarSinonimosCabecalho(['tipo', 'categoria', 'natureza']),
-      medios: criarSinonimosCabecalho(['classificacao', 'grupo', 'entrada', 'saida']),
-      fracos: criarSinonimosCabecalho(['credito', 'debito']),
-    },
-  };
-
-  const disponiveis = candidatos.slice();
-
-  const indiceData = selecionarIndiceCabecalho(disponiveis, configuracao.data);
-  if (indiceData === -1) {
-    return null;
-  }
-  removerCandidatoCabecalho(disponiveis, indiceData);
-
-  const indiceDescricao = selecionarIndiceCabecalho(disponiveis, configuracao.descricao);
-  if (indiceDescricao === -1) {
-    return null;
-  }
-  removerCandidatoCabecalho(disponiveis, indiceDescricao);
-
-  const indiceValor = selecionarIndiceCabecalho(disponiveis, configuracao.valor);
-  if (indiceValor === -1) {
-    return null;
-  }
-
-  const indiceTipo = selecionarIndiceCabecalho(candidatos, configuracao.tipo);
-
-  return {
-    tipo: indiceTipo === -1 ? null : indiceTipo,
+    tipo: indiceTipo !== -1 ? indiceTipo : null,
     data: indiceData,
     descricao: indiceDescricao,
     valor: indiceValor,
   };
-}
-
-function indiceCabecalhoValido(valor) {
-  return typeof valor === 'number' && valor >= 0;
-}
-
-function padronizarChaveComparacao(valor) {
-  if (!valor) {
-    return '';
-  }
-  return valor.replace(/[^a-z0-9]/g, '');
-}
-
-function normalizarSinonimoCabecalho(valor) {
-  return padronizarChaveComparacao(normalizarTextoParaComparacao(valor));
-}
-
-function criarSinonimosCabecalho(lista) {
-  return lista.map(function (item) {
-    return normalizarSinonimoCabecalho(item);
-  });
-}
-
-function contemTokenCabecalho(chave, tokens) {
-  if (!chave) {
-    return false;
-  }
-
-  for (let i = 0; i < tokens.length; i++) {
-    if (chave.indexOf(tokens[i]) !== -1) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function selecionarIndiceCabecalho(candidatos, configuracao) {
-  let melhorIndice = -1;
-  let melhorPontuacao = 0;
-
-  candidatos.forEach(function (item) {
-    const pontuacao = pontuarChaveCabecalho(item.chave, configuracao);
-    if (pontuacao > melhorPontuacao) {
-      melhorPontuacao = pontuacao;
-      melhorIndice = item.indice;
-    }
-  });
-
-  return melhorPontuacao > 0 ? melhorIndice : -1;
-}
-
-function pontuarChaveCabecalho(chave, configuracao) {
-  if (!chave) {
-    return 0;
-  }
-
-  const grupos = [
-    { lista: configuracao.fortes || [], valorIgual: 6, valorContem: 4 },
-    { lista: configuracao.medios || [], valorIgual: 3, valorContem: 2 },
-    { lista: configuracao.fracos || [], valorIgual: 2, valorContem: 1 },
-  ];
-
-  let pontuacao = 0;
-
-  grupos.forEach(function (grupo) {
-    grupo.lista.forEach(function (token) {
-      if (!token) {
-        return;
-      }
-      if (chave === token) {
-        pontuacao += grupo.valorIgual;
-      } else if (chave.indexOf(token) !== -1) {
-        pontuacao += grupo.valorContem;
-      }
-    });
-  });
-
-  return pontuacao;
-}
-
-function removerCandidatoCabecalho(candidatos, indice) {
-  for (let i = candidatos.length - 1; i >= 0; i--) {
-    if (candidatos[i].indice === indice) {
-      candidatos.splice(i, 1);
-      break;
-    }
-  }
 }
 
 function obterValorDaLinha(linha, indice, padrao) {
