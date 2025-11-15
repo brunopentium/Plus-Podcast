@@ -1338,7 +1338,9 @@
         const permitirExcluir = usuarioPodeExcluirLancamentos();
         atualizarVisibilidadeAcoesLancamentos();
 
-        if (!lancamentos || lancamentos.length === 0) {
+        const itens = Array.isArray(lancamentos) ? lancamentos.slice() : [];
+
+        if (itens.length === 0) {
           const linhaVazia = document.createElement('tr');
           const coluna = document.createElement('td');
           coluna.colSpan = permitirExcluir ? 5 : 4;
@@ -1348,23 +1350,25 @@
           return;
         }
 
-        lancamentos.forEach(function (item) {
+        itens.forEach(function (item) {
           const linha = document.createElement('tr');
-          linha.classList.add(item.tipo === 'Entrada' ? 'entrada' : 'saida');
+          linha.classList.add(item && item.tipo === 'Entrada' ? 'entrada' : 'saida');
 
           const colunaTipo = document.createElement('td');
-          colunaTipo.textContent = item.tipo;
+          colunaTipo.textContent = item && item.tipo ? item.tipo : '-';
 
           const colunaData = document.createElement('td');
-          const dataObj = new Date(item.data);
+          const dataFonte = item ? item.data : null;
+          const dataObj = dataFonte instanceof Date ? dataFonte : new Date(dataFonte);
           colunaData.textContent = formatarDataBrasileira(dataObj);
 
           const colunaDescricao = document.createElement('td');
-          colunaDescricao.textContent = item.descricao || '-';
+          colunaDescricao.textContent = (item && item.descricao ? String(item.descricao) : '').trim() || '-';
 
           const colunaValor = document.createElement('td');
           colunaValor.classList.add('valor');
-          colunaValor.textContent = formatadorMoeda.format(item.valor || 0);
+          const valorNumerico = obterValorNumerico(item ? item.valor : null);
+          colunaValor.textContent = formatadorMoeda.format(valorNumerico);
 
           linha.appendChild(colunaTipo);
           linha.appendChild(colunaData);
@@ -1389,6 +1393,20 @@
 
           corpoTabela.appendChild(linha);
         });
+      }
+
+      function obterValorNumerico(valor) {
+        if (typeof valor === 'number' && isFinite(valor)) {
+          return valor;
+        }
+        const texto = valor === null || typeof valor === 'undefined' ? '' : String(valor);
+        const normalizado = texto
+          .replace(/\s/g, '')
+          .replace(/R\$/gi, '')
+          .replace(/\./g, '')
+          .replace(',', '.');
+        const numero = Number(normalizado);
+        return isFinite(numero) ? numero : 0;
       }
 
       function formatarDataBrasileira(data) {

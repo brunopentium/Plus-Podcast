@@ -568,52 +568,136 @@ function getMesesDisponiveis(requisicao) {
 }
 
 /**
- * Lê os lançamentos de uma aba específica a partir da linha 5.
+ * Lê os lançamentos de uma aba específica respeitando o cabeçalho padrão.
  *
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet Aba alvo.
  * @param {'Entrada'|'Saída'} tipo Tipo do lançamento.
- * @return {Array<{tipo: string, data: Date, descricao: string, valor: number}>}
+ * @return {Array<{tipo: string, data: Date, descricao: string, valor: number, linha: number}>}
  */
 function lerLancamentosDaAba(sheet, tipo) {
   if (!sheet) {
     return [];
   }
 
-  const primeiraLinhaDados = 5;
   const ultimaLinha = sheet.getLastRow();
-
-  if (ultimaLinha < primeiraLinhaDados) {
+  if (ultimaLinha === 0) {
     return [];
   }
 
-  const numeroLinhas = ultimaLinha - primeiraLinhaDados + 1;
-  const valores = sheet.getRange(primeiraLinhaDados, 1, numeroLinhas, 3).getValues();
+  const dados = sheet.getRange(1, 1, ultimaLinha, 3).getValues();
+  if (!dados || dados.length === 0) {
+    return [];
+  }
 
-  return valores.reduce(function (acumulador, linha, indice) {
-    const dataCelula = linha[0];
-    const descricao = linha[1];
-    const valor = Number(linha[2]);
+  const registros = [];
+  const indiceInicial = ehCabecalhoLancamentos(dados[0]) ? 1 : 0;
 
-    if (!dataCelula && !descricao && isNaN(valor)) {
-      return acumulador;
+  for (let i = indiceInicial; i < dados.length; i++) {
+    const linhaAtual = dados[i];
+    const dataCelula = linhaAtual[0];
+    const descricaoCelula = linhaAtual[1];
+    const valorCelula = linhaAtual[2];
+
+    if (!possuiConteudoLancamento(dataCelula, descricaoCelula, valorCelula)) {
+      continue;
     }
 
     const dataObj = converterValorParaDataPlanilha(dataCelula);
-
     if (!(dataObj instanceof Date) || isNaN(dataObj)) {
-      return acumulador;
+      continue;
     }
 
-    acumulador.push({
+    registros.push({
       tipo: tipo,
       data: dataObj,
-      descricao: descricao || '',
-      valor: isNaN(valor) ? 0 : valor,
-      linha: primeiraLinhaDados + indice,
+      descricao: limparTextoCelula(descricaoCelula),
+      valor: normalizarValorMonetario(valorCelula),
+      linha: i + 1,
     });
+  }
 
-    return acumulador;
-  }, []);
+  return registros;
+}
+
+function possuiConteudoLancamento(dataCelula, descricaoCelula, valorCelula) {
+  if (dataCelula instanceof Date && !isNaN(dataCelula)) {
+    return true;
+  }
+  if (typeof dataCelula === 'string' && dataCelula.trim()) {
+    return true;
+  }
+  if (limparTextoCelula(descricaoCelula)) {
+    return true;
+  }
+  if (typeof valorCelula === 'number' && !isNaN(valorCelula)) {
+    return true;
+  }
+  if (typeof valorCelula === 'string' && valorCelula.trim()) {
+    return true;
+  }
+  return false;
+}
+
+function ehCabecalhoLancamentos(linha) {
+  if (!linha || linha.length < 3) {
+    return false;
+  }
+
+  const primeiraColuna = normalizarTextoParaComparacao(linha[0]);
+  const segundaColuna = normalizarTextoParaComparacao(linha[1]);
+  const terceiraColuna = normalizarTextoParaComparacao(linha[2]);
+
+  if (!primeiraColuna || !segundaColuna || !terceiraColuna) {
+    return false;
+  }
+
+  return (
+    primeiraColuna.indexOf('data') !== -1 &&
+    (segundaColuna.indexOf('descricao') !== -1 || segundaColuna.indexOf('descri') !== -1) &&
+    terceiraColuna.indexOf('valor') !== -1
+  );
+}
+
+function normalizarTextoParaComparacao(valor) {
+  if (typeof valor !== 'string') {
+    return '';
+  }
+  return valor
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function limparTextoCelula(valor) {
+  if (valor === null || typeof valor === 'undefined') {
+    return '';
+  }
+  if (typeof valor === 'string') {
+    return valor.trim();
+  }
+  return String(valor).trim();
+}
+
+function normalizarValorMonetario(valor) {
+  if (typeof valor === 'number' && !isNaN(valor)) {
+    return valor;
+  }
+
+  if (typeof valor === 'string') {
+    const textoNormalizado = valor
+      .replace(/\s/g, '')
+      .replace(/R\$/gi, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+
+    const numero = Number(textoNormalizado);
+    if (!isNaN(numero)) {
+      return numero;
+    }
+  }
+
+  return 0;
 }
 
 /**
