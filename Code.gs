@@ -458,90 +458,70 @@ function getLancamentosRecentes(requisicao) {
   return filtrados.slice(0, maxRegistros);
 }
 
-/**
- * Remove lançamentos informados para o usuário com permissão.
- *
- * @param {{lancamentos: Array<{tipo: 'Entrada'|'Saída', linha: number}>}} requisicao
- * @return {{success: boolean, message: string}}
- */
-function deleteLancamentos(requisicao) {
-  try {
-    const contexto = prepararContexto(requisicao, true);
+function listarLancamentos(requisicao) {
+  const contexto = prepararContexto(requisicao, false);
+  const parametros = contexto.parametros || {};
 
-    if (!contexto || !contexto.sessao || contexto.sessao.id !== 'bruno') {
-      return {
-        success: false,
-        message: 'Somente o usuário Bruno pode excluir lançamentos.',
-      };
+  const maxRegistrosInformado = Number(parametros.limite || parametros.limit);
+  const limite = isFinite(maxRegistrosInformado) && maxRegistrosInformado > 0
+    ? Math.floor(maxRegistrosInformado)
+    : 200;
+
+  const intervalo = determinarIntervaloLancamentos(parametros);
+  const filtroPersonalizado = Boolean(
+    (typeof parametros.dataInicio === 'string' && parametros.dataInicio) ||
+      (typeof parametros.dataFim === 'string' && parametros.dataFim) ||
+      (typeof parametros.mesReferencia === 'string' && parametros.mesReferencia)
+  );
+
+  const spreadsheet = SpreadsheetApp.getActive();
+  const sheetEntradas = obterAbaPorNomesOuCriar(
+    spreadsheet,
+    NOMES_POSSIVEIS_ENTRADAS,
+    'Entradas'
+  );
+  const sheetSaidas = obterAbaPorNomesOuCriar(spreadsheet, NOMES_POSSIVEIS_SAIDAS, 'Saídas');
+
+  const todosLancamentos = [];
+  todosLancamentos.push.apply(
+    todosLancamentos,
+    lerLancamentosDaAba(sheetEntradas, 'Entrada')
+  );
+  todosLancamentos.push.apply(
+    todosLancamentos,
+    lerLancamentosDaAba(sheetSaidas, 'Saída')
+  );
+
+  todosLancamentos.sort(function (a, b) {
+    return b.data - a.data;
+  });
+
+  const filtrados = todosLancamentos.filter(function (item) {
+    if (!(item.data instanceof Date) || isNaN(item.data)) {
+      return false;
     }
-
-    const itens = Array.isArray(contexto.parametros.lancamentos)
-      ? contexto.parametros.lancamentos
-      : [];
-
-    if (itens.length === 0) {
-      return {
-        success: false,
-        message: 'Nenhum lançamento informado para exclusão.',
-      };
+    if (!intervalo.inicio && !intervalo.fim) {
+      return true;
     }
-
-    const porTipo = itens.reduce(function (acumulador, item) {
-      const tipo = item && item.tipo;
-      const linha = Number(item && item.linha);
-      if ((tipo === 'Entrada' || tipo === 'Saída') && !isNaN(linha) && linha >= 5) {
-        if (!acumulador[tipo]) {
-          acumulador[tipo] = [];
-        }
-        if (acumulador[tipo].indexOf(linha) === -1) {
-          acumulador[tipo].push(linha);
-        }
-      }
-      return acumulador;
-    }, {});
-
-    const tipos = Object.keys(porTipo);
-    if (tipos.length === 0) {
-      return {
-        success: false,
-        message: 'Nenhum lançamento válido informado para exclusão.',
-      };
+    if (intervalo.inicio && item.data < intervalo.inicio) {
+      return false;
     }
+    if (intervalo.fim && item.data > intervalo.fim) {
+      return false;
+    }
+    return true;
+  });
 
-    const spreadsheet = SpreadsheetApp.getActive();
+  const base = filtrados.length === 0 && !filtroPersonalizado ? todosLancamentos : filtrados;
 
-    tipos.forEach(function (tipo) {
-      const sheet = obterAbaPorTipo(tipo, spreadsheet);
-      if (!sheet) {
-        throw new Error('Tipo de lançamento inválido: ' + tipo);
-      }
-
-      const linhas = porTipo[tipo]
-        .slice()
-        .sort(function (a, b) {
-          return b - a;
-        });
-
-      linhas.forEach(function (linha) {
-        const ultimaLinha = sheet.getLastRow();
-        if (linha > ultimaLinha) {
-          throw new Error('Linha inválida para exclusão: ' + linha);
-        }
-        sheet.deleteRow(linha);
-      });
-    });
-
+  return base.slice(0, limite).map(function (item) {
     return {
-      success: true,
-      message: 'Lançamento excluído com sucesso.',
+      tipo: item.tipo,
+      data: item.data,
+      descricao: item.descricao,
+      valor: item.valor,
     };
-  } catch (erro) {
-    Logger.log('Erro ao excluir lançamento: ' + erro);
-    return {
-      success: false,
-      message: 'Não foi possível excluir o lançamento. Tente novamente.',
-    };
-  }
+  });
 }
 
 /**
