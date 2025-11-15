@@ -376,6 +376,51 @@
         color: var(--cor-saldo);
       }
 
+      .abas-navegacao {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 0;
+      }
+
+      .aba-botao {
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        border: 1px solid #90caf9;
+        border-radius: 999px;
+        align-self: center;
+        padding: 0.6rem 1.25rem;
+        transform: none;
+        transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+      }
+
+      .aba-botao:hover:not(:disabled) {
+        background-color: #bbdefb;
+        color: #0b3c91;
+        transform: none;
+      }
+
+      .aba-botao.ativo {
+        background-color: #0d47a1;
+        color: #ffffff;
+        border-color: #0d47a1;
+      }
+
+      .aba-botao:focus-visible {
+        outline: 3px solid rgba(13, 71, 161, 0.35);
+        outline-offset: 2px;
+      }
+
+      .aba-conteudo {
+        display: none;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .aba-conteudo.ativo {
+        display: flex;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -497,171 +542,208 @@
       </form>
     </div>
     <main id="appConteudo" hidden>
-      <section aria-labelledby="resumo-titulo">
-        <h2 id="resumo-titulo">Resumo Financeiro</h2>
-        <div class="controle-mes">
-          <label for="mesResumo">Selecionar mês</label>
-          <select id="mesResumo" aria-label="Selecionar mês para o resumo"></select>
-        </div>
-        <div class="cards-container">
-          <div class="card saldo">
-            <h3>Saldo atual</h3>
-            <span id="saldoAtual" class="valor">R$ 0,00</span>
-          </div>
-          <div class="card entrada">
-            <h3>Total de Entradas</h3>
-            <span id="totalEntradas" class="valor">R$ 0,00</span>
-          </div>
-          <div class="card saida">
-            <h3>Total de Saídas</h3>
-            <span id="totalSaidas" class="valor">R$ 0,00</span>
-          </div>
-        </div>
-      </section>
+      <div class="abas-navegacao" role="tablist" aria-label="Navegação do aplicativo">
+        <button
+          type="button"
+          id="abaResumoBotao"
+          class="aba-botao ativo"
+          data-alvo="abaResumo"
+          role="tab"
+          aria-selected="true"
+          aria-controls="abaResumo"
+          tabindex="0"
+        >
+          Resumo e lançamentos
+        </button>
+        <button
+          type="button"
+          id="abaConsultaBotao"
+          class="aba-botao"
+          data-alvo="abaConsulta"
+          role="tab"
+          aria-selected="false"
+          aria-controls="abaConsulta"
+          tabindex="-1"
+        >
+          Consulta de lançamentos
+        </button>
+      </div>
 
-      <section aria-labelledby="novo-titulo">
-        <h2 id="novo-titulo">Novo Lançamento</h2>
-        <p id="avisoSomenteLeitura" class="alerta-somente-leitura" hidden>
-          Você está utilizando uma conta com permissão somente leitura. O envio de novos lançamentos está
-          desabilitado para este perfil.
-        </p>
-        <form id="formLancamento">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="dataLancamento">Data</label>
-              <input id="dataLancamento" type="date" required />
+      <div id="abaResumo" class="aba-conteudo ativo" role="tabpanel" aria-labelledby="abaResumoBotao">
+        <section aria-labelledby="resumo-titulo">
+          <h2 id="resumo-titulo">Resumo Financeiro</h2>
+          <div class="controle-mes">
+            <label for="mesResumo">Selecionar mês</label>
+            <select id="mesResumo" aria-label="Selecionar mês para o resumo"></select>
+          </div>
+          <div class="cards-container">
+            <div class="card saldo">
+              <h3>Saldo atual</h3>
+              <span id="saldoAtual" class="valor">R$ 0,00</span>
+            </div>
+            <div class="card entrada">
+              <h3>Total de Entradas</h3>
+              <span id="totalEntradas" class="valor">R$ 0,00</span>
+            </div>
+            <div class="card saida">
+              <h3>Total de Saídas</h3>
+              <span id="totalSaidas" class="valor">R$ 0,00</span>
             </div>
           </div>
-          <div class="categorias-lancamento" aria-label="Atalhos para descrição do lançamento">
-            <div class="categoria-grupo">
-              <span class="categoria-titulo">Entradas</span>
-              <div class="grupo-botoes" data-grupo="entrada">
-                <button
-                  type="button"
-                  class="botao-categoria"
-                  data-tipo="Entrada"
-                  data-descricao="Patrocínio"
-                  data-exige-detalhe="true"
-                >
-                  Patrocínio
-                </button>
-                <button
-                  type="button"
-                  class="botao-categoria"
-                  data-tipo="Entrada"
-                  data-descricao="Aporte Bruno"
-                >
-                  Aporte Bruno
-                </button>
-                <button
-                  type="button"
-                  class="botao-categoria"
-                  data-tipo="Entrada"
-                  data-descricao="Aporte Xandão"
-                >
-                  Aporte Xandão
-                </button>
-                <button
-                  type="button"
-                  class="botao-categoria"
-                  data-tipo="Entrada"
-                  data-permite-livre="true"
-                  data-focus="descricao"
-                >
-                  Outro
-                </button>
+        </section>
+
+        <section aria-labelledby="novo-titulo">
+          <h2 id="novo-titulo">Novo Lançamento</h2>
+          <p id="avisoSomenteLeitura" class="alerta-somente-leitura" hidden>
+            Você está utilizando uma conta com permissão somente leitura. O envio de novos lançamentos está
+            desabilitado para este perfil.
+          </p>
+          <form id="formLancamento">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="dataLancamento">Data</label>
+                <input id="dataLancamento" type="date" required />
               </div>
             </div>
-            <div class="categoria-grupo">
-              <span class="categoria-titulo">Saídas</span>
-              <div class="grupo-botoes" data-grupo="saida">
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Scallet">
-                  Scallet
-                </button>
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="ADS">
-                  ADS
-                </button>
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Social Monster">
-                  Social Monster
-                </button>
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="IA">
-                  IA
-                </button>
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Instagram">
-                  Instagram
-                </button>
-                <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Studio">
-                  Studio
-                </button>
-                <button
-                  type="button"
-                  class="botao-categoria"
-                  data-tipo="Saída"
-                  data-permite-livre="true"
-                  data-focus="descricao"
-                >
-                  Outro
-                </button>
+            <div class="categorias-lancamento" aria-label="Atalhos para descrição do lançamento">
+              <div class="categoria-grupo">
+                <span class="categoria-titulo">Entradas</span>
+                <div class="grupo-botoes" data-grupo="entrada">
+                  <button
+                    type="button"
+                    class="botao-categoria"
+                    data-tipo="Entrada"
+                    data-descricao="Patrocínio"
+                    data-exige-detalhe="true"
+                  >
+                    Patrocínio
+                  </button>
+                  <button
+                    type="button"
+                    class="botao-categoria"
+                    data-tipo="Entrada"
+                    data-descricao="Aporte Bruno"
+                  >
+                    Aporte Bruno
+                  </button>
+                  <button
+                    type="button"
+                    class="botao-categoria"
+                    data-tipo="Entrada"
+                    data-descricao="Aporte Xandão"
+                  >
+                    Aporte Xandão
+                  </button>
+                  <button
+                    type="button"
+                    class="botao-categoria"
+                    data-tipo="Entrada"
+                    data-permite-livre="true"
+                    data-focus="descricao"
+                  >
+                    Outro
+                  </button>
+                </div>
+              </div>
+              <div class="categoria-grupo">
+                <span class="categoria-titulo">Saídas</span>
+                <div class="grupo-botoes" data-grupo="saida">
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Scallet">
+                    Scallet
+                  </button>
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="ADS">
+                    ADS
+                  </button>
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Social Monster">
+                    Social Monster
+                  </button>
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="IA">
+                    IA
+                  </button>
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Instagram">
+                    Instagram
+                  </button>
+                  <button type="button" class="botao-categoria" data-tipo="Saída" data-descricao="Studio">
+                    Studio
+                  </button>
+                  <button
+                    type="button"
+                    class="botao-categoria"
+                    data-tipo="Saída"
+                    data-permite-livre="true"
+                    data-focus="descricao"
+                  >
+                    Outro
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="descricaoLancamento">Descrição</label>
-              <input id="descricaoLancamento" type="text" placeholder="Descrição do lançamento" required />
+            <div class="form-row">
+              <div class="form-group">
+                <label for="descricaoLancamento">Descrição</label>
+                <input id="descricaoLancamento" type="text" placeholder="Descrição do lançamento" required />
+              </div>
+              <div class="form-group">
+                <label for="valorLancamento">Valor</label>
+                <input id="valorLancamento" type="number" step="0.01" min="0" placeholder="0,00" required />
+              </div>
             </div>
-            <div class="form-group">
-              <label for="valorLancamento">Valor</label>
-              <input id="valorLancamento" type="number" step="0.01" min="0" placeholder="0,00" required />
+            <div class="status-area">
+              <span id="statusInfo" class="status-info"></span>
+              <span id="statusSucesso" class="status-sucesso"></span>
+              <span id="statusErro" class="status-erro"></span>
             </div>
-          </div>
-          <div class="status-area">
-            <span id="statusInfo" class="status-info"></span>
-            <span id="statusSucesso" class="status-sucesso"></span>
-            <span id="statusErro" class="status-erro"></span>
-          </div>
-          <button id="salvarLancamento" type="submit">Salvar lançamento</button>
-        </form>
-      </section>
+            <button id="salvarLancamento" type="submit">Salvar lançamento</button>
+          </form>
+        </section>
+      </div>
 
-      <section aria-labelledby="recentes-titulo">
-        <h2 id="recentes-titulo">Lançamentos Recentes</h2>
-        <div class="filtros-lancamentos" aria-label="Filtros de lançamentos recentes">
-          <div class="grupo-filtro">
-            <label for="filtroLancamentosModo">Mostrar</label>
-            <select id="filtroLancamentosModo">
-              <option value="ultimos30">Últimos 30 dias</option>
-              <option value="mes">Por mês</option>
-              <option value="periodo">Período personalizado</option>
-            </select>
+      <div
+        id="abaConsulta"
+        class="aba-conteudo"
+        role="tabpanel"
+        aria-labelledby="abaConsultaBotao"
+        hidden
+      >
+        <section aria-labelledby="recentes-titulo">
+          <h2 id="recentes-titulo">Consulta de lançamentos</h2>
+          <div class="filtros-lancamentos" aria-label="Filtros de lançamentos recentes">
+            <div class="grupo-filtro">
+              <label for="filtroLancamentosModo">Mostrar</label>
+              <select id="filtroLancamentosModo">
+                <option value="ultimos30">Últimos 30 dias</option>
+                <option value="mes">Por mês</option>
+                <option value="periodo">Período personalizado</option>
+              </select>
+            </div>
+            <div class="grupo-filtro" id="grupoFiltroMes" hidden>
+              <label for="filtroLancamentosMes">Mês</label>
+              <select id="filtroLancamentosMes"></select>
+            </div>
+            <div class="grupo-filtro grupo-periodo" id="grupoFiltroPeriodo" hidden>
+              <label for="filtroDataInicio">De</label>
+              <input type="date" id="filtroDataInicio" />
+              <label for="filtroDataFim">até</label>
+              <input type="date" id="filtroDataFim" />
+            </div>
+            <button type="button" id="aplicarFiltroLancamentos">Aplicar</button>
           </div>
-          <div class="grupo-filtro" id="grupoFiltroMes" hidden>
-            <label for="filtroLancamentosMes">Mês</label>
-            <select id="filtroLancamentosMes"></select>
+          <div class="tabela-container">
+            <table id="tabelaLancamentos">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Data</th>
+                  <th>Descrição</th>
+                  <th class="valor">Valor</th>
+                  <th class="acoes" id="colunaAcoesLancamentos" hidden>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="lancamentosBody"></tbody>
+            </table>
           </div>
-          <div class="grupo-filtro grupo-periodo" id="grupoFiltroPeriodo" hidden>
-            <label for="filtroDataInicio">De</label>
-            <input type="date" id="filtroDataInicio" />
-            <label for="filtroDataFim">até</label>
-            <input type="date" id="filtroDataFim" />
-          </div>
-          <button type="button" id="aplicarFiltroLancamentos">Aplicar</button>
-        </div>
-        <div class="tabela-container">
-          <table id="tabelaLancamentos">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Data</th>
-                <th>Descrição</th>
-                <th class="valor">Valor</th>
-                <th class="acoes" id="colunaAcoesLancamentos" hidden>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="lancamentosBody"></tbody>
-          </table>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
 
     <script>
@@ -715,6 +797,55 @@
           botaoLogout.addEventListener('click', function () {
             realizarLogout(true, 'Sessão encerrada.');
           });
+        }
+
+        configurarNavegacaoAbas();
+      }
+
+      function configurarNavegacaoAbas() {
+        const botoes = document.querySelectorAll('.aba-botao');
+        if (!botoes.length) {
+          return;
+        }
+
+        botoes.forEach(function (botao) {
+          if (botao.dataset.configurado === 'true') {
+            return;
+          }
+          botao.dataset.configurado = 'true';
+          botao.addEventListener('click', function () {
+            ativarAba(botao.dataset.alvo, botao);
+          });
+        });
+
+        const botaoAtivo = document.querySelector('.aba-botao.ativo') || botoes[0];
+        if (botaoAtivo) {
+          ativarAba(botaoAtivo.dataset.alvo, botaoAtivo);
+        }
+      }
+
+      function ativarAba(idAba, botaoReferencia) {
+        if (!idAba) {
+          return;
+        }
+
+        const abas = document.querySelectorAll('.aba-conteudo');
+        abas.forEach(function (aba) {
+          const ativa = aba.id === idAba;
+          aba.classList.toggle('ativo', ativa);
+          aba.hidden = !ativa;
+        });
+
+        const botoes = document.querySelectorAll('.aba-botao');
+        botoes.forEach(function (botao) {
+          const ativo = botao === botaoReferencia || botao.dataset.alvo === idAba;
+          botao.classList.toggle('ativo', ativo);
+          botao.setAttribute('aria-selected', ativo ? 'true' : 'false');
+          botao.setAttribute('tabindex', ativo ? '0' : '-1');
+        });
+
+        if (idAba === 'abaConsulta' && sessaoAtual) {
+          carregarLancamentos();
         }
       }
 
@@ -834,6 +965,12 @@
 
         aplicarPermissoes();
         atualizarBarraUsuario();
+
+        const botaoResumo = document.getElementById('abaResumoBotao');
+        if (botaoResumo) {
+          ativarAba('abaResumo', botaoResumo);
+        }
+
         exibirTelaLogin(exibirMensagem ? mensagem : null, exibirMensagem ? 'info' : null);
       }
 
